@@ -7849,10 +7849,10 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 				Namespace:  s.Namespace().String(),
 				ActivityId: activityID,
 			})
-			assert.NoError(c, dErr)
-			assert.Equal(c, enumspb.PENDING_ACTIVITY_STATE_PAUSED, dr.GetInfo().GetRunState())
-			assert.EqualValues(c, 2, dr.GetInfo().GetAttempt())
-			assert.NotNil(c, dr.GetInfo().GetLastFailure())
+			require.NoError(c, dErr)
+			require.Equal(c, enumspb.PENDING_ACTIVITY_STATE_PAUSED, dr.GetInfo().GetRunState())
+			require.EqualValues(c, 2, dr.GetInfo().GetAttempt())
+			require.NotNil(c, dr.GetInfo().GetLastFailure())
 		}, 10*time.Second, 200*time.Millisecond)
 
 		// Unpause – activity should be dispatched.
@@ -7945,10 +7945,10 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 				Namespace:  s.Namespace().String(),
 				ActivityId: activityID,
 			})
-			assert.NoError(c, dErr)
-			assert.Equal(c, enumspb.PENDING_ACTIVITY_STATE_PAUSED, dr.GetInfo().GetRunState())
-			assert.EqualValues(c, 2, dr.GetInfo().GetAttempt())
-			assert.Equal(c, failureMsg, dr.GetInfo().GetLastFailure().GetMessage())
+			require.NoError(c, dErr)
+			require.Equal(c, enumspb.PENDING_ACTIVITY_STATE_PAUSED, dr.GetInfo().GetRunState())
+			require.EqualValues(c, 2, dr.GetInfo().GetAttempt())
+			require.Equal(c, failureMsg, dr.GetInfo().GetLastFailure().GetMessage())
 		}, 10*time.Second, 200*time.Millisecond)
 
 		// Unpause and complete.
@@ -8042,9 +8042,9 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 				Namespace:  s.Namespace().String(),
 				ActivityId: activityID,
 			})
-			assert.NoError(c, dErr)
-			assert.Equal(c, enumspb.PENDING_ACTIVITY_STATE_PAUSED, dr.GetInfo().GetRunState())
-			assert.EqualValues(c, 2, dr.GetInfo().GetAttempt())
+			require.NoError(c, dErr)
+			require.Equal(c, enumspb.PENDING_ACTIVITY_STATE_PAUSED, dr.GetInfo().GetRunState())
+			require.EqualValues(c, 2, dr.GetInfo().GetAttempt())
 		}, 10*time.Second, 200*time.Millisecond)
 
 		// Unpause – activity should be dispatched.
