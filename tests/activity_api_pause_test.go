@@ -648,7 +648,7 @@ func TestActivityApiPauseClientTestSuite(t *testing.T) {
 				activityFunction := func() (string, error) {
 					startedActivityCount.Add(1)
 					if startedActivityCount.Load() == 1 {
-						s.WaitForChannel(ctx, activityPausedCn)
+						s.WaitForChannel(activityPausedCn)
 						return "", activityErr
 					}
 					return "done!", nil
@@ -839,7 +839,7 @@ func TestActivityApiPauseClientTestSuite(t *testing.T) {
 					if !activityWasReset.Load() {
 						return "", errors.New("bad-luck-please-retry")
 					}
-					s.WaitForChannel(ctx, activityCompleteCh)
+					s.WaitForChannel(activityCompleteCh)
 					return "done!", nil
 				}
 

@@ -478,7 +478,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 			if startedActivityCount.Load() == 1 {
 				return "", errors.New("bad-luck-please-retry")
 			}
-			s.WaitForChannel(ctx, activityUpdated)
+			s.WaitForChannel(activityUpdated)
 			return "done!", nil
 		}
 
@@ -670,7 +670,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 			if startedActivityCount.Load() == 1 {
 				return "", errors.New("bad-luck-please-retry")
 			}
-			s.WaitForChannel(ctx, activityUpdated)
+			s.WaitForChannel(activityUpdated)
 			return "done!", nil
 		}
 
