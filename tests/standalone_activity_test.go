@@ -31,6 +31,7 @@ import (
 	"go.temporal.io/server/common/payload"
 	"go.temporal.io/server/common/payloads"
 	"go.temporal.io/server/common/tasktoken"
+	"go.temporal.io/server/common/testing/await"
 	"go.temporal.io/server/common/testing/parallelsuite"
 	"go.temporal.io/server/common/testing/protorequire"
 	"go.temporal.io/server/tests/testcore"
@@ -6417,10 +6418,10 @@ func (s *standaloneActivityTestSuite) TestDispatchCancelCommandToWorker() {
 		require.NoError(t, err)
 
 		var executeReq *workerservicepb.ExecuteCommandsRequest
-		require.Eventually(t, func() bool {
+		await.RequireTrue(t, func() bool {
 			executeReq = pollNexusControlQueue()
 			return executeReq != nil
-		}, 15*time.Second, 100*time.Millisecond, "cancel command not received on control queue")
+		}, 15*time.Second, 100*time.Millisecond)
 
 		require.Len(t, executeReq.Commands, 1)
 		cancelCmd := executeReq.Commands[0].GetCancelActivity()
@@ -6460,10 +6461,10 @@ func (s *standaloneActivityTestSuite) TestDispatchCancelCommandToWorker() {
 		require.NoError(t, err)
 
 		var executeReq *workerservicepb.ExecuteCommandsRequest
-		require.Eventually(t, func() bool {
+		await.RequireTrue(t, func() bool {
 			executeReq = pollNexusControlQueue()
 			return executeReq != nil
-		}, 15*time.Second, 100*time.Millisecond, "cancel command not received on control queue after terminate")
+		}, 15*time.Second, 100*time.Millisecond)
 
 		require.Len(t, executeReq.Commands, 1)
 		cancelCmd := executeReq.Commands[0].GetCancelActivity()
