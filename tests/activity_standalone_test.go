@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http/httptest"
@@ -10,7 +9,6 @@ import (
 	"time"
 
 	"github.com/nexus-rpc/sdk-go/nexus"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	activitypb "go.temporal.io/api/activity/v1"
 	commonpb "go.temporal.io/api/common/v1"
@@ -32,6 +30,7 @@ import (
 	"go.temporal.io/server/common/payload"
 	"go.temporal.io/server/common/payloads"
 	"go.temporal.io/server/common/tasktoken"
+	"go.temporal.io/server/common/testing/await"
 	"go.temporal.io/server/common/testing/parallelsuite"
 	"go.temporal.io/server/common/testing/protorequire"
 	"go.temporal.io/server/tests/testcore"
@@ -2490,38 +2489,40 @@ func (s *standaloneActivityTestSuite) TestTerminate() {
 
 func (env *standaloneActivityEnv) eventuallyTerminated(ctx context.Context, t *testing.T, activityID, runID string) {
 	t.Helper()
-	require.Eventually(t, func() bool {
-		resp, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+	await.Require(ctx, t, func(c *await.T) {
+		resp, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 			Namespace:  env.Namespace().String(),
 			ActivityId: activityID,
 			RunId:      runID,
 		})
-		return err == nil && resp.GetInfo().GetStatus() == enumspb.ACTIVITY_EXECUTION_STATUS_TERMINATED
+		require.NoError(c, err)
+		require.Equal(c, enumspb.ACTIVITY_EXECUTION_STATUS_TERMINATED, resp.GetInfo().GetStatus())
 	}, 5*time.Second, 100*time.Millisecond)
 }
 
 func (env *standaloneActivityEnv) eventuallyTimedOut(ctx context.Context, t *testing.T, activityID, runID string) {
 	t.Helper()
-	require.Eventually(t, func() bool {
-		resp, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+	await.Require(ctx, t, func(c *await.T) {
+		resp, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 			Namespace:  env.Namespace().String(),
 			ActivityId: activityID,
 			RunId:      runID,
 		})
-		return err == nil && resp.GetInfo().GetStatus() == enumspb.ACTIVITY_EXECUTION_STATUS_TIMED_OUT
+		require.NoError(c, err)
+		require.Equal(c, enumspb.ACTIVITY_EXECUTION_STATUS_TIMED_OUT, resp.GetInfo().GetStatus())
 	}, 10*time.Second, 100*time.Millisecond)
 }
 
 func (env *standaloneActivityEnv) eventuallyDeleted(ctx context.Context, t *testing.T, activityID, runID string) {
 	t.Helper()
-	require.Eventually(t, func() bool {
-		_, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+	await.Require(ctx, t, func(c *await.T) {
+		_, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 			Namespace:  env.Namespace().String(),
 			ActivityId: activityID,
 			RunId:      runID,
 		})
 		var notFoundErr *serviceerror.NotFound
-		return errors.As(err, &notFoundErr)
+		require.ErrorAs(c, err, &notFoundErr)
 	}, 5*time.Second, 100*time.Millisecond)
 }
 
@@ -5511,13 +5512,14 @@ func (s *standaloneActivityTestSuite) TestStartDelay() {
 			"activity should not time out before startDelay + scheduleToStartTimeout")
 
 		// Now wait for the ScheduleToStart timeout to actually fire (measured from after delay).
-		require.Eventually(t, func() bool {
-			resp, err := env.FrontendClient().DescribeActivityExecution(s.Context(), &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(s.Context(), t, func(c *await.T) {
+			resp, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      startResp.RunId,
 			})
-			return err == nil && resp.GetInfo().GetStatus() == enumspb.ACTIVITY_EXECUTION_STATUS_TIMED_OUT
+			require.NoError(c, err)
+			require.Equal(c, enumspb.ACTIVITY_EXECUTION_STATUS_TIMED_OUT, resp.GetInfo().GetStatus())
 		}, 10*time.Second, 100*time.Millisecond)
 	})
 
@@ -5565,13 +5567,14 @@ func (s *standaloneActivityTestSuite) TestStartDelay() {
 			"activity should not time out before startDelay + scheduleToCloseTimeout")
 
 		// Now wait for the ScheduleToClose timeout to actually fire (measured from after delay).
-		require.Eventually(t, func() bool {
-			resp, err := env.FrontendClient().DescribeActivityExecution(s.Context(), &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(s.Context(), t, func(c *await.T) {
+			resp, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      startResp.RunId,
 			})
-			return err == nil && resp.GetInfo().GetStatus() == enumspb.ACTIVITY_EXECUTION_STATUS_TIMED_OUT
+			require.NoError(c, err)
+			require.Equal(c, enumspb.ACTIVITY_EXECUTION_STATUS_TIMED_OUT, resp.GetInfo().GetStatus())
 		}, 10*time.Second, 100*time.Millisecond)
 	})
 
@@ -7366,7 +7369,7 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 		require.NoError(t, err)
 
 		// After fail, activity should be PAUSED (SCHEDULED + paused) at attempt=2 with a recorded failure.
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
+		await.Require(s.Context(), s.T(), func(c *await.T) {
 			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
@@ -7462,7 +7465,7 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 		require.NoError(t, err)
 
 		// Verify attempt is now 2, activity is still paused, and LastFailure is populated.
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
+		await.Require(s.Context(), t, func(c *await.T) {
 			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
@@ -7541,12 +7544,13 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 		require.NoError(t, err)
 
 		// Wait for the activity to be rescheduled at attempt=2 (in retry backoff).
-		require.Eventually(t, func() bool {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
-			return dErr == nil && dr.GetInfo().GetAttempt() == 2
+			require.NoError(c, dErr)
+			require.EqualValues(c, 2, dr.GetInfo().GetAttempt())
 		}, 10*time.Second, 200*time.Millisecond)
 
 		// Pause while in SCHEDULED retry backoff.
@@ -7559,8 +7563,8 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 		require.NoError(t, err)
 
 		// Verify activity is PAUSED at attempt=2 (not dispatched while paused).
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
@@ -7635,12 +7639,13 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 		require.NoError(t, err)
 
 		// Wait for activity to be rescheduled at attempt=2.
-		require.Eventually(t, func() bool {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
-			return dErr == nil && dr.GetInfo().GetAttempt() == 2
+			require.NoError(c, dErr)
+			require.EqualValues(c, 2, dr.GetInfo().GetAttempt())
 		}, 10*time.Second, 200*time.Millisecond)
 
 		// Pause, then immediately unpause – this should skip the remaining 30s backoff.
@@ -7738,8 +7743,8 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 		require.NoError(t, err)
 
 		// Activity should be CANCELED immediately.
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      runID,
@@ -7996,8 +8001,8 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 
 		// Worker stops responding. StartToCloseTimeout must fire and the pause-request must be
 		// consumed by a retry, landing the activity in PAUSED at attempt 2.
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
@@ -8049,8 +8054,8 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 		require.NoError(t, err)
 
 		// No heartbeat → HeartbeatTimeoutTask fires → retry consumes pause-request → PAUSED at attempt 2.
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
@@ -8120,8 +8125,8 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 		require.NoError(t, err)
 
 		// New StartToCloseTimeout fires → retry consumes pause-request → PAUSED at attempt 2.
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
@@ -8179,8 +8184,8 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 		require.NoError(t, err)
 
 		// Worker polls attempt 2 → STARTED at attempt 2.
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
@@ -8214,8 +8219,8 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 
 		// Worker stops responding. StartToCloseTimeout fires → AttemptFailedWhilePauseRequested
 		// consumes ActivityReset → PAUSED at attempt 1.
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
@@ -8346,12 +8351,13 @@ func (s *standaloneActivityTestSuite) TestPauseActivityExecution() {
 		require.NoError(t, err)
 
 		// Wait for attempt 2 (rescheduled in long backoff, not yet dispatched).
-		require.Eventually(t, func() bool {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
-			return dErr == nil && dr.GetInfo().GetAttempt() == 2
+			require.NoError(c, dErr)
+			require.EqualValues(c, 2, dr.GetInfo().GetAttempt())
 		}, 10*time.Second, 200*time.Millisecond)
 
 		// Pause while SCHEDULED (in 10-minute retry backoff).
@@ -8578,15 +8584,13 @@ func (s *standaloneActivityTestSuite) TestUnpauseActivityExecution() {
 		require.NoError(t, err)
 
 		// Wait for the activity to enter SCHEDULED state for retry.
-		require.Eventually(t, func() bool {
-			descResp, descErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			descResp, descErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
-			if descErr != nil {
-				return false
-			}
-			return descResp.GetInfo().GetAttempt() == 2
+			require.NoError(c, descErr)
+			require.EqualValues(c, 2, descResp.GetInfo().GetAttempt())
 		}, 15*time.Second, 200*time.Millisecond)
 
 		// Pause while SCHEDULED (attempt=2).
@@ -8752,12 +8756,13 @@ func (s *standaloneActivityTestSuite) TestUnpauseActivityExecution() {
 		require.NoError(t, err)
 
 		// Wait for attempt 2 (count increments immediately on reschedule, even during backoff).
-		require.Eventually(t, func() bool {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
-			return dErr == nil && dr.GetInfo().GetAttempt() == 2
+			require.NoError(c, dErr)
+			require.EqualValues(c, 2, dr.GetInfo().GetAttempt())
 		}, 10*time.Second, 200*time.Millisecond)
 
 		// Heartbeat details should still be set before the unpause.
@@ -9021,13 +9026,14 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 
 	waitForState := func(ctx context.Context, t *testing.T, activityID, runID string, state enumspb.PendingActivityState) {
 		t.Helper()
-		require.Eventually(t, func() bool {
-			desc, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			desc, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      runID,
 			})
-			return err == nil && desc.GetInfo().GetRunState() == state
+			require.NoError(c, err)
+			require.Equal(c, state, desc.GetInfo().GetRunState())
 		}, 5*time.Second, 100*time.Millisecond)
 	}
 
@@ -9060,18 +9066,17 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 		failRetryable(ctx, t, pollResp2.TaskToken, 60*time.Second)
 
 		// Verify activity is SCHEDULED (backing off at attempt 3)
-		require.Eventually(t, func() bool {
-			desc, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			desc, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      startResp.GetRunId(),
 			})
-			if err != nil || desc.GetInfo() == nil {
-				return false
-			}
+			require.NoError(c, err)
+			require.NotNil(c, desc.GetInfo())
 			info := desc.GetInfo()
-			return info.GetRunState() == enumspb.PENDING_ACTIVITY_STATE_SCHEDULED &&
-				info.GetAttempt() == 3
+			require.Equal(c, enumspb.PENDING_ACTIVITY_STATE_SCHEDULED, info.GetRunState())
+			require.EqualValues(c, 3, info.GetAttempt())
 		}, 5*time.Second, 200*time.Millisecond)
 
 		// Reset while SCHEDULED — should re-dispatch immediately at attempt 1
@@ -9212,14 +9217,14 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 		failRetryable(ctx, t, pollResp1.TaskToken, 0)
 
 		// Verify in SCHEDULED state
-		require.Eventually(t, func() bool {
-			desc, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			desc, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      startResp.GetRunId(),
 			})
-			return err == nil &&
-				desc.GetInfo().GetRunState() == enumspb.PENDING_ACTIVITY_STATE_SCHEDULED
+			require.NoError(c, err)
+			require.Equal(c, enumspb.PENDING_ACTIVITY_STATE_SCHEDULED, desc.GetInfo().GetRunState())
 		}, 5*time.Second, 200*time.Millisecond)
 
 		// Reset — should bypass the 1-minute wait and dispatch immediately
@@ -9278,14 +9283,14 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 		failRetryable(ctx, t, pollResp1.TaskToken, 60*time.Second)
 
 		// Wait for SCHEDULED state
-		require.Eventually(t, func() bool {
-			d, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			d, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      startResp.GetRunId(),
 			})
-			return err == nil &&
-				d.GetInfo().GetRunState() == enumspb.PENDING_ACTIVITY_STATE_SCHEDULED
+			require.NoError(c, err)
+			require.Equal(c, enumspb.PENDING_ACTIVITY_STATE_SCHEDULED, d.GetInfo().GetRunState())
 		}, 5*time.Second, 200*time.Millisecond)
 
 		// Reset with heartbeat reset
@@ -9448,14 +9453,14 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 		failRetryable(ctx, t, pollResp1.TaskToken, 0)
 
 		// Wait for SCHEDULED state (retry backoff)
-		require.Eventually(t, func() bool {
-			desc, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			desc, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      startResp.GetRunId(),
 			})
-			return err == nil &&
-				desc.GetInfo().GetRunState() == enumspb.PENDING_ACTIVITY_STATE_SCHEDULED
+			require.NoError(c, err)
+			require.Equal(c, enumspb.PENDING_ACTIVITY_STATE_SCHEDULED, desc.GetInfo().GetRunState())
 		}, 5*time.Second, 200*time.Millisecond)
 
 		// Pause the activity
@@ -9469,14 +9474,14 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 		require.NoError(t, err)
 
 		// Verify activity is paused
-		require.Eventually(t, func() bool {
-			desc, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			desc, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      startResp.GetRunId(),
 			})
-			return err == nil &&
-				desc.GetInfo().GetRunState() == enumspb.PENDING_ACTIVITY_STATE_PAUSED
+			require.NoError(c, err)
+			require.Equal(c, enumspb.PENDING_ACTIVITY_STATE_PAUSED, desc.GetInfo().GetRunState())
 		}, 5*time.Second, 200*time.Millisecond)
 
 		// Verify attempt count is >= 2 (failed at least once before pause)
@@ -9498,15 +9503,15 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 		require.NoError(t, err)
 
 		// Verify still paused with attempt=1
-		require.Eventually(t, func() bool {
-			desc, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			desc, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      startResp.GetRunId(),
 			})
-			return err == nil &&
-				desc.GetInfo().GetRunState() == enumspb.PENDING_ACTIVITY_STATE_PAUSED &&
-				desc.GetInfo().GetAttempt() == int32(1)
+			require.NoError(c, err)
+			require.Equal(c, enumspb.PENDING_ACTIVITY_STATE_PAUSED, desc.GetInfo().GetRunState())
+			require.EqualValues(c, 1, desc.GetInfo().GetAttempt())
 		}, 2*time.Second, 200*time.Millisecond)
 
 		// Unpause the activity
@@ -9556,13 +9561,14 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 		// Fail attempt 1 with a long backoff so the activity is SCHEDULED backing off.
 		failRetryable(ctx, t, pollResp1.TaskToken, 60*time.Second)
 
-		require.Eventually(t, func() bool {
-			desc, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			desc, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      startResp.GetRunId(),
 			})
-			return err == nil && desc.GetInfo().GetRunState() == enumspb.PENDING_ACTIVITY_STATE_SCHEDULED
+			require.NoError(c, err)
+			require.Equal(c, enumspb.PENDING_ACTIVITY_STATE_SCHEDULED, desc.GetInfo().GetRunState())
 		}, 5*time.Second, 100*time.Millisecond)
 
 		// Update MaximumAttempts to a different value.
@@ -9745,15 +9751,15 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 		failRetryable(ctx, t, pollResp1.TaskToken, 0)
 
 		// Activity should be PAUSED at attempt 1 (deferred reset + preserved pause).
-		require.Eventually(t, func() bool {
-			desc, err := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			desc, err := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 				RunId:      startResp.GetRunId(),
 			})
-			return err == nil &&
-				desc.GetInfo().GetRunState() == enumspb.PENDING_ACTIVITY_STATE_PAUSED &&
-				desc.GetInfo().GetAttempt() == int32(1)
+			require.NoError(c, err)
+			require.Equal(c, enumspb.PENDING_ACTIVITY_STATE_PAUSED, desc.GetInfo().GetRunState())
+			require.EqualValues(c, 1, desc.GetInfo().GetAttempt())
 		}, 5*time.Second, 100*time.Millisecond)
 
 		// Unpause and verify dispatch at attempt 1.
@@ -9821,8 +9827,8 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 
 		// Worker stops responding. StartToCloseTimeout must fire and the reset-request must be
 		// consumed by a retry, landing the activity in SCHEDULED at attempt 1 (reset applied).
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
@@ -9874,8 +9880,8 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 		require.NoError(t, err)
 
 		// No heartbeat → HeartbeatTimeoutTask fires → retry consumes reset-request → SCHEDULED at attempt 1.
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
@@ -9943,8 +9949,8 @@ func (s *standaloneActivityTestSuite) TestResetActivityExecution() {
 		require.NoError(t, err)
 
 		// New StartToCloseTimeout fires → retry consumes reset-request → SCHEDULED at attempt 1.
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			dr, dErr := env.FrontendClient().DescribeActivityExecution(ctx, &workflowservice.DescribeActivityExecutionRequest{
+		await.Require(ctx, t, func(c *await.T) {
+			dr, dErr := env.FrontendClient().DescribeActivityExecution(c.Context(), &workflowservice.DescribeActivityExecutionRequest{
 				Namespace:  env.Namespace().String(),
 				ActivityId: activityID,
 			})
