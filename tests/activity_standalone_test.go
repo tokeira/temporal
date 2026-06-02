@@ -4276,7 +4276,7 @@ func (s *standaloneActivityTestSuite) TestListActivityExecutions() {
 	verifyListQuery := func(t *testing.T, query string, pageSize int32) {
 		t.Helper()
 		var resp *workflowservice.ListActivityExecutionsResponse
-		s.Eventually(
+		s.AwaitTrue(
 			func() bool {
 				var err error
 				resp, err = env.FrontendClient().ListActivityExecutions(s.Context(), &workflowservice.ListActivityExecutionsRequest{
@@ -4347,7 +4347,7 @@ func (s *standaloneActivityTestSuite) TestListActivityExecutions() {
 		require.NoError(t, err)
 
 		var resp *workflowservice.ListActivityExecutionsResponse
-		s.Eventually(
+		s.AwaitTrue(
 			func() bool {
 				var err error
 				resp, err = env.FrontendClient().ListActivityExecutions(s.Context(), &workflowservice.ListActivityExecutionsRequest{
@@ -4429,7 +4429,7 @@ func (s *standaloneActivityTestSuite) TestListActivityExecutions() {
 		}
 
 		// Wait for both activities to be indexed in Elasticsearch before testing pagination
-		s.Eventually(
+		s.AwaitTrue(
 			func() bool {
 				countResp, err := env.FrontendClient().CountActivityExecutions(s.Context(), &workflowservice.CountActivityExecutionsRequest{
 					Namespace: env.Namespace().String(),
@@ -4485,7 +4485,7 @@ func (s *standaloneActivityTestSuite) TestCountActivityExecutions() {
 
 	verifyCountQuery := func(t *testing.T, query string, expectedCount int) {
 		t.Helper()
-		s.Eventually(
+		s.AwaitTrue(
 			func() bool {
 				resp, err := env.FrontendClient().CountActivityExecutions(s.Context(), &workflowservice.CountActivityExecutionsRequest{
 					Namespace: env.Namespace().String(),
@@ -4527,7 +4527,7 @@ func (s *standaloneActivityTestSuite) TestCountActivityExecutions() {
 
 		query := fmt.Sprintf("ActivityType = '%s' GROUP BY ExecutionStatus", groupByType.Name)
 		var resp *workflowservice.CountActivityExecutionsResponse
-		s.Eventually(
+		s.AwaitTrue(
 			func() bool {
 				var err error
 				resp, err = env.FrontendClient().CountActivityExecutions(s.Context(), &workflowservice.CountActivityExecutionsRequest{
@@ -4559,7 +4559,7 @@ func (s *standaloneActivityTestSuite) TestCountActivityExecutions() {
 		})
 		require.NoError(t, err)
 
-		s.Eventually(func() bool {
+		s.AwaitTrue(func() bool {
 			descResp, err := env.OperatorClient().ListSearchAttributes(s.Context(), &operatorservice.ListSearchAttributesRequest{
 				Namespace: env.Namespace().String(),
 			})
@@ -4589,7 +4589,7 @@ func (s *standaloneActivityTestSuite) TestCountActivityExecutions() {
 			require.NoError(t, err)
 		}
 
-		s.Eventually(
+		s.AwaitTrue(
 			func() bool {
 				resp, err := env.FrontendClient().CountActivityExecutions(s.Context(), &workflowservice.CountActivityExecutionsRequest{
 					Namespace: env.Namespace().String(),

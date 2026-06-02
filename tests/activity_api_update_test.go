@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	activitypb "go.temporal.io/api/activity/v1"
 	commonpb "go.temporal.io/api/common/v1"
@@ -16,6 +15,7 @@ import (
 	sdkclient "go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
+	"go.temporal.io/server/common/testing/await"
 	"go.temporal.io/server/tests/testcore"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -146,7 +146,7 @@ func TestActivityApiUpdateClientTestSuite(t *testing.T) {
 				workflowRun, err := s.SdkClient().ExecuteWorkflow(ctx, workflowOptions, workflowFn)
 				s.NoError(err)
 
-				s.EventuallyWithT(func(t *assert.CollectT) {
+				await.Require(s.Context(), s.T(), func(t *await.T) {
 					description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 					require.NoError(t, err)
 					require.Len(t, description.GetPendingActivities(), 1)
@@ -174,7 +174,7 @@ func TestActivityApiUpdateClientTestSuite(t *testing.T) {
 					t.Fatal("timed out waiting for activity to receive update signal")
 				}
 
-				s.EventuallyWithT(func(t *assert.CollectT) {
+				await.Require(s.Context(), s.T(), func(t *await.T) {
 					description, err = s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 					require.NoError(t, err)
 					require.Empty(t, description.GetPendingActivities())
@@ -220,7 +220,7 @@ func TestActivityApiUpdateClientTestSuite(t *testing.T) {
 				s.NoError(err)
 
 				// wait for activity to start (and fail)
-				s.EventuallyWithT(func(t *assert.CollectT) {
+				await.Require(s.Context(), s.T(), func(t *await.T) {
 					description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 					require.NoError(t, err)
 					require.Len(t, description.GetPendingActivities(), 1)
@@ -239,7 +239,7 @@ func TestActivityApiUpdateClientTestSuite(t *testing.T) {
 				s.NoError(err)
 
 				// activity should fail immediately
-				s.EventuallyWithT(func(t *assert.CollectT) {
+				await.Require(s.Context(), s.T(), func(t *await.T) {
 					description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 					require.NoError(t, err)
 					require.Empty(t, description.GetPendingActivities())
@@ -298,7 +298,7 @@ func TestActivityApiUpdateClientTestSuite(t *testing.T) {
 				s.NoError(err)
 
 				// wait for activity to start (and fail)
-				s.EventuallyWithT(func(t *assert.CollectT) {
+				await.Require(s.Context(), s.T(), func(t *await.T) {
 					require.NotZero(t, startedActivityCount.Load())
 				}, 2*time.Second, 200*time.Millisecond)
 
@@ -322,7 +322,7 @@ func TestActivityApiUpdateClientTestSuite(t *testing.T) {
 				s.Equal(int64(scheduleToCloseTimeout.Seconds()), respOpts.StartToCloseTimeout.GetSeconds())
 
 				// now activity should succeed
-				s.EventuallyWithT(func(t *assert.CollectT) {
+				await.Require(s.Context(), s.T(), func(t *await.T) {
 					description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 					require.NoError(t, err)
 					require.Empty(t, description.GetPendingActivities())
@@ -377,7 +377,7 @@ func TestActivityApiUpdateClientTestSuite(t *testing.T) {
 				s.NoError(err)
 
 				// wait for activity to start (and fail)
-				s.EventuallyWithT(func(t *assert.CollectT) {
+				await.Require(s.Context(), s.T(), func(t *await.T) {
 					description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 					require.NoError(t, err)
 					require.Len(t, description.GetPendingActivities(), 1)
@@ -397,7 +397,7 @@ func TestActivityApiUpdateClientTestSuite(t *testing.T) {
 				s.NoError(err)
 
 				// check that the update was successful
-				s.EventuallyWithT(func(t *assert.CollectT) {
+				await.Require(s.Context(), s.T(), func(t *await.T) {
 					description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 					require.NoError(t, err)
 					require.Len(t, description.PendingActivities, 1)
@@ -413,7 +413,7 @@ func TestActivityApiUpdateClientTestSuite(t *testing.T) {
 				s.NoError(err)
 
 				// check that the reset was successful
-				s.EventuallyWithT(func(t *assert.CollectT) {
+				await.Require(s.Context(), s.T(), func(t *await.T) {
 					description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 					require.NoError(t, err)
 					require.Len(t, description.PendingActivities, 1)
@@ -442,7 +442,7 @@ func TestActivityApiUpdateClientTestSuite(t *testing.T) {
 				}
 
 				// wait for activity to finish
-				s.EventuallyWithT(func(t *assert.CollectT) {
+				await.Require(s.Context(), s.T(), func(t *await.T) {
 					description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 					require.NoError(t, err)
 					require.Empty(t, description.GetPendingActivities())
@@ -492,7 +492,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 		}, workflowFn)
 		s.NoError(err)
 
-		s.EventuallyWithT(func(t *assert.CollectT) {
+		await.Require(s.Context(), s.T(), func(t *await.T) {
 			description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 			require.NoError(t, err)
 			require.Len(t, description.GetPendingActivities(), 1)
@@ -520,7 +520,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 			t.Fatal("timed out waiting for activity to receive update signal")
 		}
 
-		s.EventuallyWithT(func(t *assert.CollectT) {
+		await.Require(s.Context(), s.T(), func(t *await.T) {
 			description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 			require.NoError(t, err)
 			require.Empty(t, description.GetPendingActivities())
@@ -557,7 +557,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 		}, workflowFn)
 		s.NoError(err)
 
-		s.EventuallyWithT(func(t *assert.CollectT) {
+		await.Require(s.Context(), s.T(), func(t *await.T) {
 			description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 			require.NoError(t, err)
 			require.Len(t, description.GetPendingActivities(), 1)
@@ -577,7 +577,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 		s.NoError(err)
 		s.NotNil(resp)
 
-		s.EventuallyWithT(func(t *assert.CollectT) {
+		await.Require(s.Context(), s.T(), func(t *await.T) {
 			description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 			require.NoError(t, err)
 			require.Empty(t, description.GetPendingActivities())
@@ -621,7 +621,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 		}, workflowFn)
 		s.NoError(err)
 
-		s.EventuallyWithT(func(t *assert.CollectT) {
+		await.Require(s.Context(), s.T(), func(t *await.T) {
 			require.NotZero(t, startedActivityCount.Load())
 		}, 2*time.Second, 200*time.Millisecond)
 
@@ -644,7 +644,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 		s.Equal(int64(newScheduleToCloseTimeout.Seconds()), resp.GetActivityOptions().ScheduleToCloseTimeout.GetSeconds())
 		s.Equal(int64(scheduleToCloseTimeout.Seconds()), resp.GetActivityOptions().StartToCloseTimeout.GetSeconds())
 
-		s.EventuallyWithT(func(t *assert.CollectT) {
+		await.Require(s.Context(), s.T(), func(t *await.T) {
 			description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 			require.NoError(t, err)
 			require.Empty(t, description.GetPendingActivities())
@@ -684,7 +684,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 		}, workflowFn)
 		s.NoError(err)
 
-		s.EventuallyWithT(func(t *assert.CollectT) {
+		await.Require(s.Context(), s.T(), func(t *await.T) {
 			description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 			require.NoError(t, err)
 			require.Len(t, description.GetPendingActivities(), 1)
@@ -707,7 +707,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 		s.NoError(err)
 		s.NotNil(resp)
 
-		s.EventuallyWithT(func(t *assert.CollectT) {
+		await.Require(s.Context(), s.T(), func(t *await.T) {
 			description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 			require.NoError(t, err)
 			require.Len(t, description.PendingActivities, 1)
@@ -725,7 +725,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 		s.NoError(err)
 		s.NotNil(resp)
 
-		s.EventuallyWithT(func(t *assert.CollectT) {
+		await.Require(s.Context(), s.T(), func(t *await.T) {
 			description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 			require.NoError(t, err)
 			require.Len(t, description.PendingActivities, 1)
@@ -755,7 +755,7 @@ func TestActivityUpdateExecutionOptionsApi(t *testing.T) {
 			t.Fatal("timed out waiting for activity to receive update signal")
 		}
 
-		s.EventuallyWithT(func(t *assert.CollectT) {
+		await.Require(s.Context(), s.T(), func(t *await.T) {
 			description, err := s.SdkClient().DescribeWorkflowExecution(ctx, workflowRun.GetID(), workflowRun.GetRunID())
 			require.NoError(t, err)
 			require.Empty(t, description.GetPendingActivities())
