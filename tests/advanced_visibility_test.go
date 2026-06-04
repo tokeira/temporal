@@ -68,13 +68,10 @@ func TestAdvancedVisibilitySuiteLegacy(t *testing.T) {
 }
 
 // newTestEnv creates a TestEnv with the dynamic config this suite needs.
-// The build-id scavenger workflow runs on the system worker service, so the env
-// requests a worker-enabled (dedicated) cluster.
 // Additional per-test options may be passed in opts.
 func (s *AdvancedVisibilitySuite) newTestEnv(enableUnifiedQueryConverter bool, opts ...testcore.TestOption) *testcore.TestEnv {
 	// This cluster use customized threshold for history config
 	baseOpts := []testcore.TestOption{
-		testcore.WithWorkerService("build id scavenger workflow"),
 		testcore.WithDynamicConfig(dynamicconfig.VisibilityDisableOrderByClause, false),
 		testcore.WithDynamicConfig(dynamicconfig.FrontendEnableWorkerVersioningDataAPIs, true),
 		testcore.WithDynamicConfig(dynamicconfig.FrontendEnableWorkerVersioningWorkflowAPIs, true),
@@ -640,7 +637,6 @@ func (s *AdvancedVisibilitySuite) TestListWorkflow_OrderBy(enableUnifiedQueryCon
 		s.T().Skip("This test is only for Elasticsearch")
 	}
 
-	ctx := s.Context()
 	id := "es-functional-list-workflow-order-by-test"
 	wt := "es-functional-list-workflow-order-by-test-type"
 	tl := "es-functional-list-workflow-order-by-test-taskqueue"
@@ -682,7 +678,7 @@ func (s *AdvancedVisibilitySuite) TestListWorkflow_OrderBy(enableUnifiedQueryCon
 	s.EventuallyWithT(
 		func(c *assert.CollectT) {
 			resp, err := env.FrontendClient().CountWorkflowExecutions(
-				ctx,
+				s.Context(),
 				&workflowservice.CountWorkflowExecutionsRequest{
 					Namespace: env.Namespace().String(),
 					Query:     fmt.Sprintf(`WorkflowType = "%s"`, wt),
@@ -708,7 +704,7 @@ func (s *AdvancedVisibilitySuite) TestListWorkflow_OrderBy(enableUnifiedQueryCon
 		PageSize:  pageSize,
 		Query:     query1,
 	}
-	resp, err := env.FrontendClient().ListWorkflowExecutions(ctx, listRequest)
+	resp, err := env.FrontendClient().ListWorkflowExecutions(s.Context(), listRequest)
 	s.NoError(err)
 	s.Len(resp.GetExecutions(), int(pageSize))
 	openExecutions = resp.GetExecutions()
@@ -725,7 +721,7 @@ func (s *AdvancedVisibilitySuite) TestListWorkflow_OrderBy(enableUnifiedQueryCon
 	testHelper := func(query, searchAttrKey string, prevVal, currVal any) {
 		listRequest.Query = query
 		listRequest.NextPageToken = []byte{}
-		resp, err := env.FrontendClient().ListWorkflowExecutions(ctx, listRequest)
+		resp, err := env.FrontendClient().ListWorkflowExecutions(s.Context(), listRequest)
 		s.NoError(err)
 		openExecutions = resp.GetExecutions()
 		dec := json.NewDecoder(bytes.NewReader(openExecutions[0].GetSearchAttributes().GetIndexedFields()[searchAttrKey].GetData()))
@@ -762,7 +758,7 @@ func (s *AdvancedVisibilitySuite) TestListWorkflow_OrderBy(enableUnifiedQueryCon
 			prevVal = currVal
 		}
 		listRequest.NextPageToken = resp.GetNextPageToken()
-		resp, err = env.FrontendClient().ListWorkflowExecutions(ctx, listRequest) // last page
+		resp, err = env.FrontendClient().ListWorkflowExecutions(s.Context(), listRequest) // last page
 		s.NoError(err)
 		s.Len(resp.GetExecutions(), 1)
 	}
@@ -1650,7 +1646,6 @@ func (s *AdvancedVisibilitySuite) TestUpsertWorkflowExecution_InvalidKey(enableU
 func (s *AdvancedVisibilitySuite) TestChildWorkflow_ParentWorkflow(enableUnifiedQueryConverter bool) {
 	env := s.newTestEnv(enableUnifiedQueryConverter)
 	var (
-		ctx         = s.Context()
 		wfID        = testcore.RandomizeStr(s.T().Name())
 		childWfID   = testcore.RandomizeStr(s.T().Name())
 		childWfType = "child-wf-type-" + wfID
@@ -1676,15 +1671,15 @@ func (s *AdvancedVisibilitySuite) TestChildWorkflow_ParentWorkflow(enableUnified
 		ID:        wfID,
 		TaskQueue: env.WorkerTaskQueue(),
 	}
-	run, err := env.SdkClient().ExecuteWorkflow(ctx, startOptions, wfType)
+	run, err := env.SdkClient().ExecuteWorkflow(s.Context(), startOptions, wfType)
 	s.NoError(err)
-	s.NoError(run.Get(ctx, nil))
+	s.NoError(run.Get(s.Context(), nil))
 
 	// check main workflow doesn't have parent workflow and root is itself
 	s.EventuallyWithT(
 		func(c *assert.CollectT) {
 			resp, err := env.FrontendClient().ListWorkflowExecutions(
-				ctx,
+				s.Context(),
 				&workflowservice.ListWorkflowExecutionsRequest{
 					Namespace: env.Namespace().String(),
 					Query:     fmt.Sprintf("WorkflowType = %q", wfType),
@@ -1708,7 +1703,7 @@ func (s *AdvancedVisibilitySuite) TestChildWorkflow_ParentWorkflow(enableUnified
 	s.EventuallyWithT(
 		func(c *assert.CollectT) {
 			resp, err := env.FrontendClient().ListWorkflowExecutions(
-				ctx,
+				s.Context(),
 				&workflowservice.ListWorkflowExecutionsRequest{
 					Namespace: env.Namespace().String(),
 					Query:     fmt.Sprintf("WorkflowType = %q", childWfType),
@@ -1751,20 +1746,19 @@ func (s *AdvancedVisibilitySuite) Test_LongWorkflowID(enableUnifiedQueryConverte
 
 func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnCompletion_UnversionedWorker(enableUnifiedQueryConverter bool) {
 	env := s.newTestEnv(enableUnifiedQueryConverter)
-	ctx := s.Context()
 	id := testcore.RandomizeStr(s.T().Name())
 	workflowType := "functional-build-id"
 	taskQueue := testcore.RandomizeStr(s.T().Name())
 
 	request := s.createStartWorkflowExecutionRequest(env, id, workflowType, taskQueue)
-	_, err := env.FrontendClient().StartWorkflowExecution(ctx, request)
+	_, err := env.FrontendClient().StartWorkflowExecution(s.Context(), request)
 	s.NoError(err)
 
 	pollRequest := &workflowservice.PollWorkflowTaskQueueRequest{Namespace: env.Namespace().String(), TaskQueue: request.TaskQueue, Identity: id}
-	task, err := env.FrontendClient().PollWorkflowTaskQueue(ctx, pollRequest)
+	task, err := env.FrontendClient().PollWorkflowTaskQueue(s.Context(), pollRequest)
 	s.NoError(err)
 	s.NotEmpty(task.TaskToken)
-	_, err = env.FrontendClient().RespondWorkflowTaskCompleted(ctx, &workflowservice.RespondWorkflowTaskCompletedRequest{
+	_, err = env.FrontendClient().RespondWorkflowTaskCompleted(s.Context(), &workflowservice.RespondWorkflowTaskCompletedRequest{
 		Namespace:          env.Namespace().String(),
 		Identity:           id,
 		WorkerVersionStamp: &commonpb.WorkerVersionStamp{BuildId: "1.0"},
@@ -1772,19 +1766,19 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnCompletion_UnversionedWor
 	})
 	s.NoError(err)
 
-	buildIDs := s.getBuildIds(ctx, env, task.WorkflowExecution)
+	buildIDs := s.getBuildIds(env, task.WorkflowExecution)
 	s.Equal([]string{
 		worker_versioning.UnversionedSearchAttribute,
 		worker_versioning.UnversionedBuildIdSearchAttribute("1.0"),
 	}, buildIDs)
 
-	_, err = env.FrontendClient().SignalWorkflowExecution(ctx, &workflowservice.SignalWorkflowExecutionRequest{Namespace: env.Namespace().String(), WorkflowExecution: task.WorkflowExecution, SignalName: "continue"})
+	_, err = env.FrontendClient().SignalWorkflowExecution(s.Context(), &workflowservice.SignalWorkflowExecutionRequest{Namespace: env.Namespace().String(), WorkflowExecution: task.WorkflowExecution, SignalName: "continue"})
 	s.NoError(err)
 
-	task, err = env.FrontendClient().PollWorkflowTaskQueue(ctx, pollRequest)
+	task, err = env.FrontendClient().PollWorkflowTaskQueue(s.Context(), pollRequest)
 	s.NoError(err)
 	s.NotEmpty(task.TaskToken)
-	_, err = env.FrontendClient().RespondWorkflowTaskCompleted(ctx, &workflowservice.RespondWorkflowTaskCompletedRequest{
+	_, err = env.FrontendClient().RespondWorkflowTaskCompleted(s.Context(), &workflowservice.RespondWorkflowTaskCompletedRequest{
 		Namespace:          env.Namespace().String(),
 		Identity:           id,
 		WorkerVersionStamp: &commonpb.WorkerVersionStamp{BuildId: "1.1"},
@@ -1801,21 +1795,21 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnCompletion_UnversionedWor
 	})
 	s.NoError(err)
 
-	buildIDs = s.getBuildIds(ctx, env, task.WorkflowExecution)
+	buildIDs = s.getBuildIds(env, task.WorkflowExecution)
 	s.Equal([]string{
 		worker_versioning.UnversionedSearchAttribute,
 		worker_versioning.UnversionedBuildIdSearchAttribute("1.0"),
 		worker_versioning.UnversionedBuildIdSearchAttribute("1.1"),
 	}, buildIDs)
 
-	task, err = env.FrontendClient().PollWorkflowTaskQueue(ctx, pollRequest)
+	task, err = env.FrontendClient().PollWorkflowTaskQueue(s.Context(), pollRequest)
 	s.NoError(err)
 	s.NotEmpty(task.TaskToken)
 
-	buildIDs = s.getBuildIds(ctx, env, task.WorkflowExecution)
+	buildIDs = s.getBuildIds(env, task.WorkflowExecution)
 	s.Equal([]string{}, buildIDs)
 
-	_, err = env.FrontendClient().RespondWorkflowTaskCompleted(ctx, &workflowservice.RespondWorkflowTaskCompletedRequest{
+	_, err = env.FrontendClient().RespondWorkflowTaskCompleted(s.Context(), &workflowservice.RespondWorkflowTaskCompletedRequest{
 		Namespace:          env.Namespace().String(),
 		Identity:           id,
 		WorkerVersionStamp: &commonpb.WorkerVersionStamp{BuildId: "1.2"},
@@ -1829,12 +1823,12 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnCompletion_UnversionedWor
 	})
 	s.NoError(err)
 
-	buildIDs = s.getBuildIds(ctx, env, task.WorkflowExecution)
+	buildIDs = s.getBuildIds(env, task.WorkflowExecution)
 	s.Equal([]string{worker_versioning.UnversionedSearchAttribute, worker_versioning.UnversionedBuildIdSearchAttribute("1.2")}, buildIDs)
 
 	for minor := 1; minor <= 2; minor++ {
 		s.Eventually(func() bool {
-			response, err := env.FrontendClient().ListWorkflowExecutions(ctx, &workflowservice.ListWorkflowExecutionsRequest{
+			response, err := env.FrontendClient().ListWorkflowExecutions(s.Context(), &workflowservice.ListWorkflowExecutionsRequest{
 				Namespace: env.Namespace().String(),
 				Query:     fmt.Sprintf("BuildIds = '%s'", worker_versioning.UnversionedBuildIdSearchAttribute(fmt.Sprintf("1.%d", minor))),
 				PageSize:  testcore.DefaultPageSize,
@@ -1858,7 +1852,6 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnCompletion_VersionedWorke
 		testcore.WithDynamicConfig(dynamicconfig.MatchingNumTaskqueueWritePartitions, 1),
 	)
 
-	ctx := s.Context()
 	id := testcore.RandomizeStr(s.T().Name())
 	childId1 := "child1-" + id
 	childId2 := "child2-" + id
@@ -1900,7 +1893,7 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnCompletion_VersionedWorke
 	}
 
 	// Declare v1
-	_, err := env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err := env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: taskQueue,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewBuildIdInNewDefaultSet{
@@ -1923,7 +1916,7 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnCompletion_VersionedWorke
 		ID:        id,
 		TaskQueue: taskQueue,
 	}
-	run, err := env.SdkClient().ExecuteWorkflow(ctx, startOptions, workflowType)
+	run, err := env.SdkClient().ExecuteWorkflow(s.Context(), startOptions, workflowType)
 	s.NoError(err)
 
 	<-startedCh
@@ -1931,7 +1924,7 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnCompletion_VersionedWorke
 
 	// Verify first WFT was processed by our v1 worker
 	s.Eventually(func() bool {
-		buildIDs := s.getBuildIds(ctx, env, &commonpb.WorkflowExecution{WorkflowId: id})
+		buildIDs := s.getBuildIds(env, &commonpb.WorkflowExecution{WorkflowId: id})
 		if len(buildIDs) == 0 {
 			return false
 		}
@@ -1940,7 +1933,7 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnCompletion_VersionedWorke
 	}, time.Second*15, time.Millisecond*100)
 
 	// Update sets with v1.1
-	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: taskQueue,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewCompatibleBuildId{
@@ -1963,46 +1956,46 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnCompletion_VersionedWorke
 	defer w11.Stop()
 
 	// Resume workflow execution and wait for first task after CAN
-	err = env.SdkClient().SignalWorkflow(ctx, id, "", "continue", nil)
+	err = env.SdkClient().SignalWorkflow(s.Context(), id, "", "continue", nil)
 	s.NoError(err)
 
-	err = run.GetWithOptions(ctx, nil, sdkclient.WorkflowRunGetOptions{DisableFollowingRuns: true})
+	err = run.GetWithOptions(s.Context(), nil, sdkclient.WorkflowRunGetOptions{DisableFollowingRuns: true})
 	var canError *workflow.ContinueAsNewError
 	s.ErrorAs(err, &canError)
 
 	secondRunId := <-startedCh
 
 	// Verify both workers appear in the search attribute for first run in chain
-	buildIDs := s.getBuildIds(ctx, env, &commonpb.WorkflowExecution{WorkflowId: id, RunId: run.GetRunID()})
+	buildIDs := s.getBuildIds(env, &commonpb.WorkflowExecution{WorkflowId: id, RunId: run.GetRunID()})
 	s.Equal([]string{worker_versioning.VersionedBuildIdSearchAttribute(buildIdv1), worker_versioning.VersionedBuildIdSearchAttribute(buildIdv11)}, buildIDs)
 
 	// Check search attribute is propagated after first continue as new
-	buildIDs = s.getBuildIds(ctx, env, &commonpb.WorkflowExecution{WorkflowId: id})
+	buildIDs = s.getBuildIds(env, &commonpb.WorkflowExecution{WorkflowId: id})
 	s.Equal([]string{worker_versioning.VersionedBuildIdSearchAttribute(buildIdv11)}, buildIDs)
 
 	// Resume and wait for the workflow CAN for the last time
-	err = env.SdkClient().SignalWorkflow(ctx, id, "", "continue", nil)
+	err = env.SdkClient().SignalWorkflow(s.Context(), id, "", "continue", nil)
 	s.NoError(err)
 
-	run = env.SdkClient().GetWorkflow(ctx, id, secondRunId)
-	err = run.GetWithOptions(ctx, nil, sdkclient.WorkflowRunGetOptions{DisableFollowingRuns: true})
+	run = env.SdkClient().GetWorkflow(s.Context(), id, secondRunId)
+	err = run.GetWithOptions(s.Context(), nil, sdkclient.WorkflowRunGetOptions{DisableFollowingRuns: true})
 	s.ErrorAs(err, &canError)
 
 	// Check search attribute is not propagated after second continue as new
-	buildIDs = s.getBuildIds(ctx, env, &commonpb.WorkflowExecution{WorkflowId: id})
+	buildIDs = s.getBuildIds(env, &commonpb.WorkflowExecution{WorkflowId: id})
 	s.Equal([]string{}, buildIDs)
 
 	// Check search attribute is propagated to first child
-	buildIDs = s.getBuildIds(ctx, env, &commonpb.WorkflowExecution{WorkflowId: childId1})
+	buildIDs = s.getBuildIds(env, &commonpb.WorkflowExecution{WorkflowId: childId1})
 	s.Equal([]string{worker_versioning.VersionedBuildIdSearchAttribute(buildIdv11)}, buildIDs)
 
 	// Check search attribute is not propagated to second child
-	buildIDs = s.getBuildIds(ctx, env, &commonpb.WorkflowExecution{WorkflowId: childId2})
+	buildIDs = s.getBuildIds(env, &commonpb.WorkflowExecution{WorkflowId: childId2})
 	s.Equal([]string{}, buildIDs)
 
 	// We should have 3 runs with the v1.1 search attribute: First and second run in chain, and single child
 	s.Eventually(func() bool {
-		response, err := env.FrontendClient().ListWorkflowExecutions(ctx, &workflowservice.ListWorkflowExecutionsRequest{
+		response, err := env.FrontendClient().ListWorkflowExecutions(s.Context(), &workflowservice.ListWorkflowExecutionsRequest{
 			Namespace: env.Namespace().String(),
 			Query:     fmt.Sprintf("BuildIds = %q", worker_versioning.VersionedBuildIdSearchAttribute(buildIdv11)),
 			PageSize:  testcore.DefaultPageSize,
@@ -2024,7 +2017,6 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnReset(enableUnifiedQueryC
 		testcore.WithDynamicConfig(dynamicconfig.MatchingNumTaskqueueWritePartitions, 1),
 	)
 
-	ctx := s.Context()
 	id := testcore.RandomizeStr(s.T().Name())
 	workflowType := "functional-build-id"
 	taskQueue := testcore.RandomizeStr(s.T().Name())
@@ -2044,7 +2036,7 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnReset(enableUnifiedQueryC
 	}
 
 	// Declare v1
-	_, err := env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err := env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: taskQueue,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewBuildIdInNewDefaultSet{
@@ -2068,27 +2060,27 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnReset(enableUnifiedQueryC
 		ID:        id,
 		TaskQueue: taskQueue,
 	}
-	run, err := env.SdkClient().ExecuteWorkflow(ctx, startOptions, workflowType)
+	run, err := env.SdkClient().ExecuteWorkflow(s.Context(), startOptions, workflowType)
 	s.NoError(err)
 
-	err = run.GetWithOptions(ctx, nil, sdkclient.WorkflowRunGetOptions{DisableFollowingRuns: true})
+	err = run.GetWithOptions(s.Context(), nil, sdkclient.WorkflowRunGetOptions{DisableFollowingRuns: true})
 	var canError *workflow.ContinueAsNewError
 	s.ErrorAs(err, &canError)
 
 	// Confirm first WFT is complete before resetting
 	<-startedCh
 
-	resetResult, err := env.SdkClient().ResetWorkflowExecution(ctx, &workflowservice.ResetWorkflowExecutionRequest{
+	resetResult, err := env.SdkClient().ResetWorkflowExecution(s.Context(), &workflowservice.ResetWorkflowExecutionRequest{
 		Namespace:                 env.Namespace().String(),
 		WorkflowExecution:         &commonpb.WorkflowExecution{WorkflowId: id},
 		WorkflowTaskFinishEventId: 3,
 	})
 	s.NoError(err)
-	buildIDs := s.getBuildIds(ctx, env, &commonpb.WorkflowExecution{WorkflowId: id, RunId: resetResult.RunId})
+	buildIDs := s.getBuildIds(env, &commonpb.WorkflowExecution{WorkflowId: id, RunId: resetResult.RunId})
 	s.Equal([]string{worker_versioning.VersionedBuildIdSearchAttribute(buildIdv1)}, buildIDs)
 
 	s.Eventually(func() bool {
-		response, err := env.FrontendClient().ListWorkflowExecutions(ctx, &workflowservice.ListWorkflowExecutionsRequest{
+		response, err := env.FrontendClient().ListWorkflowExecutions(s.Context(), &workflowservice.ListWorkflowExecutionsRequest{
 			Namespace: env.Namespace().String(),
 			Query:     fmt.Sprintf("BuildIds = %q AND RunId = %q", worker_versioning.VersionedBuildIdSearchAttribute(buildIdv1), resetResult.RunId),
 			PageSize:  testcore.DefaultPageSize,
@@ -2110,7 +2102,6 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnRetry(enableUnifiedQueryC
 		testcore.WithDynamicConfig(dynamicconfig.MatchingNumTaskqueueWritePartitions, 1),
 	)
 
-	ctx := s.Context()
 	id := testcore.RandomizeStr(s.T().Name())
 	workflowType := "functional-build-id"
 	taskQueue := testcore.RandomizeStr(s.T().Name())
@@ -2121,7 +2112,7 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnRetry(enableUnifiedQueryC
 	}
 
 	// Declare v1
-	_, err := env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err := env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: taskQueue,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewBuildIdInNewDefaultSet{
@@ -2149,15 +2140,15 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnRetry(enableUnifiedQueryC
 			MaximumAttempts: 2,
 		},
 	}
-	run, err := env.SdkClient().ExecuteWorkflow(ctx, startOptions, workflowType)
+	run, err := env.SdkClient().ExecuteWorkflow(s.Context(), startOptions, workflowType)
 	s.NoError(err)
-	s.Error(run.Get(ctx, nil))
+	s.Error(run.Get(s.Context(), nil))
 
-	buildIDs := s.getBuildIds(ctx, env, &commonpb.WorkflowExecution{WorkflowId: id})
+	buildIDs := s.getBuildIds(env, &commonpb.WorkflowExecution{WorkflowId: id})
 	s.Equal([]string{worker_versioning.VersionedBuildIdSearchAttribute(buildIdv1)}, buildIDs)
 
 	s.Eventually(func() bool {
-		response, err := env.FrontendClient().ListWorkflowExecutions(ctx, &workflowservice.ListWorkflowExecutionsRequest{
+		response, err := env.FrontendClient().ListWorkflowExecutions(s.Context(), &workflowservice.ListWorkflowExecutionsRequest{
 			Namespace: env.Namespace().String(),
 			Query:     fmt.Sprintf("BuildIds = %q", worker_versioning.VersionedBuildIdSearchAttribute(buildIdv1)),
 			PageSize:  testcore.DefaultPageSize,
@@ -2175,7 +2166,6 @@ func (s *AdvancedVisibilitySuite) Test_BuildIdIndexedOnRetry(enableUnifiedQueryC
 
 func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId(enableUnifiedQueryConverter bool) {
 	env := s.newTestEnv(enableUnifiedQueryConverter)
-	ctx := s.Context()
 	tq1 := s.T().Name()
 	tq2 := s.T().Name() + "-2"
 	tq3 := s.T().Name() + "-3"
@@ -2184,7 +2174,7 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId(enableUni
 	buildIdv1 := s.T().Name() + "-v1"
 	var err error
 
-	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: tq1,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewBuildIdInNewDefaultSet{
@@ -2192,7 +2182,7 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId(enableUni
 		},
 	})
 	s.NoError(err)
-	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: tq1,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewCompatibleBuildId{
@@ -2203,7 +2193,7 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId(enableUni
 		},
 	})
 	s.NoError(err)
-	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: tq2,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewBuildIdInNewDefaultSet{
@@ -2213,7 +2203,7 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId(enableUni
 	s.NoError(err)
 
 	// Map v0 to a third queue to test limit enforcement
-	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: tq3,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewBuildIdInNewDefaultSet{
@@ -2224,7 +2214,7 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId(enableUni
 
 	var reachabilityResponse *workflowservice.GetWorkerTaskReachabilityResponse
 
-	reachabilityResponse, err = env.FrontendClient().GetWorkerTaskReachability(ctx, &workflowservice.GetWorkerTaskReachabilityRequest{
+	reachabilityResponse, err = env.FrontendClient().GetWorkerTaskReachability(s.Context(), &workflowservice.GetWorkerTaskReachabilityRequest{
 		Namespace:    env.Namespace().String(),
 		BuildIds:     []string{v0},
 		Reachability: enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS,
@@ -2240,7 +2230,7 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId(enableUni
 	}}, reachabilityResponse.BuildIdReachability)
 
 	// Start a workflow on tq1 and verify it affects the reachability of v0.1
-	_, err = env.FrontendClient().StartWorkflowExecution(ctx, &workflowservice.StartWorkflowExecutionRequest{
+	_, err = env.FrontendClient().StartWorkflowExecution(s.Context(), &workflowservice.StartWorkflowExecutionRequest{
 		RequestId:    uuid.NewString(),
 		Namespace:    env.Namespace().String(),
 		WorkflowId:   testcore.RandomizeStr(s.T().Name()),
@@ -2249,18 +2239,18 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId(enableUni
 	})
 	s.NoError(err)
 
-	s.checkReachability(ctx, env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
-	s.checkReachability(ctx, env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_OPEN_WORKFLOWS)
+	s.checkReachability(env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
+	s.checkReachability(env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_OPEN_WORKFLOWS)
 
 	// Complete the workflow and verify it affects reachability of v0.1
-	task, err := env.FrontendClient().PollWorkflowTaskQueue(ctx, &workflowservice.PollWorkflowTaskQueueRequest{
+	task, err := env.FrontendClient().PollWorkflowTaskQueue(s.Context(), &workflowservice.PollWorkflowTaskQueueRequest{
 		Namespace:                 env.Namespace().String(),
 		TaskQueue:                 &taskqueuepb.TaskQueue{Name: tq1, Kind: enumspb.TASK_QUEUE_KIND_NORMAL},
 		WorkerVersionCapabilities: &commonpb.WorkerVersionCapabilities{BuildId: v01, UseVersioning: true},
 	})
 	s.NoError(err)
 	s.NotEmpty(task.GetTaskToken())
-	_, err = env.FrontendClient().RespondWorkflowTaskCompleted(ctx, &workflowservice.RespondWorkflowTaskCompletedRequest{
+	_, err = env.FrontendClient().RespondWorkflowTaskCompleted(s.Context(), &workflowservice.RespondWorkflowTaskCompletedRequest{
 		Namespace:          env.Namespace().String(),
 		TaskToken:          task.TaskToken,
 		WorkerVersionStamp: &commonpb.WorkerVersionStamp{BuildId: v01, UseVersioning: true},
@@ -2271,11 +2261,11 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId(enableUni
 	})
 	s.NoError(err)
 
-	s.checkReachability(ctx, env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
-	s.checkReachability(ctx, env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
+	s.checkReachability(env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
+	s.checkReachability(env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
 
 	// Make v1 default for queue 1
-	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: tq1,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewBuildIdInNewDefaultSet{
@@ -2286,22 +2276,21 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId(enableUni
 
 	// Verify new workflows are considered reachable by v01 which is no longer queue default within the configured
 	// duration
-	s.checkReachability(ctx, env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
-	s.checkReachability(ctx, env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
+	s.checkReachability(env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
+	s.checkReachability(env, tq1, v01, enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
 
 	env.OverrideDynamicConfig(dynamicconfig.ReachabilityQuerySetDurationSinceDefault, time.Microsecond)
 	// Verify new workflows aren't reachable
-	s.checkReachability(ctx, env, tq1, v01, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
-	s.checkReachability(ctx, env, tq1, v01, enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
+	s.checkReachability(env, tq1, v01, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
+	s.checkReachability(env, tq1, v01, enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
 
 }
 
 func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId_NotInNamespace(enableUnifiedQueryConverter bool) {
 	env := s.newTestEnv(enableUnifiedQueryConverter)
-	ctx := s.Context()
 	buildId := s.T().Name() + "v0"
 
-	reachabilityResponse, err := env.FrontendClient().GetWorkerTaskReachability(ctx, &workflowservice.GetWorkerTaskReachabilityRequest{
+	reachabilityResponse, err := env.FrontendClient().GetWorkerTaskReachability(s.Context(), &workflowservice.GetWorkerTaskReachabilityRequest{
 		Namespace:    env.Namespace().String(),
 		BuildIds:     []string{buildId},
 		Reachability: enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS,
@@ -2315,13 +2304,12 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId_NotInName
 
 func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId_NotInTaskQueue(enableUnifiedQueryConverter bool) {
 	env := s.newTestEnv(enableUnifiedQueryConverter)
-	ctx := s.Context()
 	tq := s.T().Name()
 	v0 := s.T().Name() + "v0"
 	v01 := s.T().Name() + "v0.1"
 
 	checkReachability := func() {
-		reachabilityResponse, err := env.FrontendClient().GetWorkerTaskReachability(ctx, &workflowservice.GetWorkerTaskReachabilityRequest{
+		reachabilityResponse, err := env.FrontendClient().GetWorkerTaskReachability(s.Context(), &workflowservice.GetWorkerTaskReachabilityRequest{
 			Namespace:  env.Namespace().String(),
 			BuildIds:   []string{v01},
 			TaskQueues: []string{tq},
@@ -2337,7 +2325,7 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId_NotInTask
 	checkReachability()
 
 	// Same but with a versioned task queue
-	_, err := env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err := env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: tq,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewBuildIdInNewDefaultSet{
@@ -2350,9 +2338,8 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_ByBuildId_NotInTask
 
 func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_EmptyBuildIds(enableUnifiedQueryConverter bool) {
 	env := s.newTestEnv(enableUnifiedQueryConverter)
-	ctx := s.Context()
 
-	_, err := env.FrontendClient().GetWorkerTaskReachability(ctx, &workflowservice.GetWorkerTaskReachabilityRequest{
+	_, err := env.FrontendClient().GetWorkerTaskReachability(s.Context(), &workflowservice.GetWorkerTaskReachabilityRequest{
 		Namespace: env.Namespace().String(),
 	})
 	var invalidArgument *serviceerror.InvalidArgument
@@ -2361,9 +2348,8 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_EmptyBuildIds(enabl
 
 func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_TooManyBuildIds(enableUnifiedQueryConverter bool) {
 	env := s.newTestEnv(enableUnifiedQueryConverter)
-	ctx := s.Context()
 
-	_, err := env.FrontendClient().GetWorkerTaskReachability(ctx, &workflowservice.GetWorkerTaskReachabilityRequest{
+	_, err := env.FrontendClient().GetWorkerTaskReachability(s.Context(), &workflowservice.GetWorkerTaskReachabilityRequest{
 		Namespace: env.Namespace().String(),
 		BuildIds:  []string{"", "v1"},
 	})
@@ -2373,9 +2359,8 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_TooManyBuildIds(ena
 
 func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_Unversioned_InNamespace(enableUnifiedQueryConverter bool) {
 	env := s.newTestEnv(enableUnifiedQueryConverter)
-	ctx := s.Context()
 
-	_, err := env.FrontendClient().GetWorkerTaskReachability(ctx, &workflowservice.GetWorkerTaskReachabilityRequest{
+	_, err := env.FrontendClient().GetWorkerTaskReachability(s.Context(), &workflowservice.GetWorkerTaskReachabilityRequest{
 		Namespace: env.Namespace().String(),
 		BuildIds:  []string{""},
 	})
@@ -2385,10 +2370,9 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_Unversioned_InNames
 
 func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_Unversioned_InTaskQueue(enableUnifiedQueryConverter bool) {
 	env := s.newTestEnv(enableUnifiedQueryConverter)
-	ctx := s.Context()
 	tq := s.T().Name()
 
-	_, err := env.FrontendClient().StartWorkflowExecution(ctx, &workflowservice.StartWorkflowExecutionRequest{
+	_, err := env.FrontendClient().StartWorkflowExecution(s.Context(), &workflowservice.StartWorkflowExecutionRequest{
 		RequestId:    uuid.NewString(),
 		Namespace:    env.Namespace().String(),
 		WorkflowId:   testcore.RandomizeStr(s.T().Name()),
@@ -2397,16 +2381,16 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_Unversioned_InTaskQ
 	})
 	s.NoError(err)
 
-	s.checkReachability(ctx, env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
-	s.checkReachability(ctx, env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_OPEN_WORKFLOWS)
+	s.checkReachability(env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
+	s.checkReachability(env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_OPEN_WORKFLOWS)
 
-	task, err := env.FrontendClient().PollWorkflowTaskQueue(ctx, &workflowservice.PollWorkflowTaskQueueRequest{
+	task, err := env.FrontendClient().PollWorkflowTaskQueue(s.Context(), &workflowservice.PollWorkflowTaskQueueRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: &taskqueuepb.TaskQueue{Name: tq, Kind: enumspb.TASK_QUEUE_KIND_NORMAL},
 	})
 	s.NoError(err)
 	s.NotEmpty(task.GetTaskToken())
-	_, err = env.FrontendClient().RespondWorkflowTaskCompleted(ctx, &workflowservice.RespondWorkflowTaskCompletedRequest{
+	_, err = env.FrontendClient().RespondWorkflowTaskCompleted(s.Context(), &workflowservice.RespondWorkflowTaskCompletedRequest{
 		Namespace: env.Namespace().String(),
 		TaskToken: task.TaskToken,
 		Commands: []*commandpb.Command{{
@@ -2416,11 +2400,11 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_Unversioned_InTaskQ
 	})
 	s.NoError(err)
 
-	s.checkReachability(ctx, env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
-	s.checkReachability(ctx, env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
+	s.checkReachability(env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
+	s.checkReachability(env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
 
 	// Make the task queue versioned and rerun our assertion
-	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: tq,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewBuildIdInNewDefaultSet{
@@ -2430,24 +2414,23 @@ func (s *AdvancedVisibilitySuite) TestWorkerTaskReachability_Unversioned_InTaskQ
 	s.NoError(err)
 
 	// Verify new workflows are considered reachable by the unversioned worker immediately after making the queue versioned
-	s.checkReachability(ctx, env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
-	s.checkReachability(ctx, env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
+	s.checkReachability(env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
+	s.checkReachability(env, tq, "", enumspb.TASK_REACHABILITY_NEW_WORKFLOWS, enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
 
 	env.OverrideDynamicConfig(dynamicconfig.ReachabilityQuerySetDurationSinceDefault, time.Microsecond)
 
-	s.checkReachability(ctx, env, tq, "", enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
-	s.checkReachability(ctx, env, tq, "", enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
+	s.checkReachability(env, tq, "", enumspb.TASK_REACHABILITY_EXISTING_WORKFLOWS)
+	s.checkReachability(env, tq, "", enumspb.TASK_REACHABILITY_CLOSED_WORKFLOWS)
 }
 
 func (s *AdvancedVisibilitySuite) TestBuildIdScavenger_DeletesUnusedBuildId(enableUnifiedQueryConverter bool) {
-	env := s.newTestEnv(enableUnifiedQueryConverter)
-	ctx := s.Context()
+	env := s.newTestEnv(enableUnifiedQueryConverter, testcore.WithWorkerService("build id scavenger workflow"))
 	tq := s.T().Name()
 	buildIdv0 := s.T().Name() + "-v0"
 	buildIdv1 := s.T().Name() + "-v1"
 	var err error
 
-	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: tq,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewBuildIdInNewDefaultSet{
@@ -2455,7 +2438,7 @@ func (s *AdvancedVisibilitySuite) TestBuildIdScavenger_DeletesUnusedBuildId(enab
 		},
 	})
 	s.NoError(err)
-	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(ctx, &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
+	_, err = env.FrontendClient().UpdateWorkerBuildIdCompatibility(s.Context(), &workflowservice.UpdateWorkerBuildIdCompatibilityRequest{
 		Namespace: env.Namespace().String(),
 		TaskQueue: tq,
 		Operation: &workflowservice.UpdateWorkerBuildIdCompatibilityRequest_AddNewBuildIdInNewDefaultSet{
@@ -2472,25 +2455,25 @@ func (s *AdvancedVisibilitySuite) TestBuildIdScavenger_DeletesUnusedBuildId(enab
 	s.NoError(err)
 	defer sysSDKClient.Close()
 
-	run, err := sysSDKClient.ExecuteWorkflow(ctx, sdkclient.StartWorkflowOptions{
+	run, err := sysSDKClient.ExecuteWorkflow(s.Context(), sdkclient.StartWorkflowOptions{
 		ID:        s.T().Name() + "-scavenger",
 		TaskQueue: build_ids.BuildIdScavengerTaskQueueName,
 	}, build_ids.BuildIdScavangerWorkflowName, build_ids.BuildIdScavangerInput{
 		IgnoreRetentionTime: true,
 	})
 	s.NoError(err)
-	err = run.Get(ctx, nil)
+	err = run.Get(s.Context(), nil)
 	s.NoError(err)
 
 	//nolint:staticcheck // SA1019 legacy test.
-	compatibility, err := env.SdkClient().GetWorkerBuildIdCompatibility(ctx, &sdkclient.GetWorkerBuildIdCompatibilityOptions{
+	compatibility, err := env.SdkClient().GetWorkerBuildIdCompatibility(s.Context(), &sdkclient.GetWorkerBuildIdCompatibilityOptions{
 		TaskQueue: tq,
 	})
 	s.NoError(err)
 	s.Len(compatibility.Sets, 1)
 	s.Equal([]string{buildIdv1}, compatibility.Sets[0].BuildIDs)
 	// Make sure the build ID was removed from the build ID->task queue mapping
-	res, err := env.SdkClient().WorkflowService().GetWorkerTaskReachability(ctx, &workflowservice.GetWorkerTaskReachabilityRequest{
+	res, err := env.SdkClient().WorkflowService().GetWorkerTaskReachability(s.Context(), &workflowservice.GetWorkerTaskReachabilityRequest{
 		Namespace: env.Namespace().String(),
 		BuildIds:  []string{buildIdv0},
 	})
@@ -2557,7 +2540,6 @@ func (s *AdvancedVisibilitySuite) TestListWorkflow_ExternalPayloadSearchAttribut
 
 func (s *AdvancedVisibilitySuite) TestScheduleListingWithSearchAttributes(enableUnifiedQueryConverter bool) {
 	env := s.newTestEnv(enableUnifiedQueryConverter)
-	ctx := s.Context()
 
 	// Test 1: List schedule with "scheduleId" query
 	scheduleID := "test-schedule-" + uuid.NewString()
@@ -2587,7 +2569,7 @@ func (s *AdvancedVisibilitySuite) TestScheduleListingWithSearchAttributes(enable
 		},
 	}
 
-	_, err := env.FrontendClient().CreateSchedule(ctx, schedule)
+	_, err := env.FrontendClient().CreateSchedule(s.Context(), schedule)
 	s.NoError(err)
 
 	listRequest := &workflowservice.ListSchedulesRequest{
@@ -2597,7 +2579,7 @@ func (s *AdvancedVisibilitySuite) TestScheduleListingWithSearchAttributes(enable
 	}
 
 	s.Eventually(func() bool {
-		listResponse, err := env.FrontendClient().ListSchedules(ctx, listRequest)
+		listResponse, err := env.FrontendClient().ListSchedules(s.Context(), listRequest)
 		if err != nil || len(listResponse.Schedules) != 1 {
 			return false
 		}
@@ -2606,13 +2588,13 @@ func (s *AdvancedVisibilitySuite) TestScheduleListingWithSearchAttributes(enable
 	}, 30*time.Second, 1*time.Second)
 
 	listRequest.Query = fmt.Sprintf(`%s IN ("%s", "foo", "bar")`, sadefs.ScheduleID, scheduleID)
-	listResponse, err := env.FrontendClient().ListSchedules(ctx, listRequest)
+	listResponse, err := env.FrontendClient().ListSchedules(s.Context(), listRequest)
 	s.NoError(err)
 	s.Len(listResponse.Schedules, 1)
 	s.Equal(listResponse.Schedules[0].ScheduleId, scheduleID)
 
 	// Test 2: List schedule with custom "scheduleId" search attribute
-	s.addCustomKeywordSearchAttribute(ctx, env, sadefs.ScheduleID)
+	s.addCustomKeywordSearchAttribute(env, sadefs.ScheduleID)
 
 	// Create the schedule with the new search attribute and verify it can be listed
 	customScheduleID := "test-schedule-" + uuid.NewString()
@@ -2626,12 +2608,12 @@ func (s *AdvancedVisibilitySuite) TestScheduleListingWithSearchAttributes(enable
 		},
 	}
 
-	_, err = env.FrontendClient().CreateSchedule(ctx, schedule)
+	_, err = env.FrontendClient().CreateSchedule(s.Context(), schedule)
 	s.NoError(err)
 
 	listRequest.Query = fmt.Sprintf(`%s = "%s"`, sadefs.ScheduleID, customSearchAttrValue)
 	s.Eventually(func() bool {
-		listResponse, err := env.FrontendClient().ListSchedules(ctx, listRequest)
+		listResponse, err := env.FrontendClient().ListSchedules(s.Context(), listRequest)
 		if err != nil || len(listResponse.Schedules) != 1 {
 			return false
 		}
@@ -2640,15 +2622,15 @@ func (s *AdvancedVisibilitySuite) TestScheduleListingWithSearchAttributes(enable
 	}, 30*time.Second, 1*time.Second)
 
 	listRequest.Query = fmt.Sprintf(`%s IN ("%s", "foo", "bar")`, sadefs.ScheduleID, customSearchAttrValue)
-	listResponse, err = env.FrontendClient().ListSchedules(ctx, listRequest)
+	listResponse, err = env.FrontendClient().ListSchedules(s.Context(), listRequest)
 	s.NoError(err)
 	s.Len(listResponse.Schedules, 1)
 	s.Equal(listResponse.Schedules[0].ScheduleId, customScheduleID)
 }
 
-func (s *AdvancedVisibilitySuite) checkReachability(ctx context.Context, env *testcore.TestEnv, taskQueue, buildID string, expectedReachability ...enumspb.TaskReachability) {
+func (s *AdvancedVisibilitySuite) checkReachability(env *testcore.TestEnv, taskQueue, buildID string, expectedReachability ...enumspb.TaskReachability) {
 	s.Eventually(func() bool { //nolint:forbidigo // await conversion is out of scope for this migration
-		reachabilityResponse, err := env.FrontendClient().GetWorkerTaskReachability(ctx, &workflowservice.GetWorkerTaskReachabilityRequest{
+		reachabilityResponse, err := env.FrontendClient().GetWorkerTaskReachability(s.Context(), &workflowservice.GetWorkerTaskReachabilityRequest{
 			Namespace:    env.Namespace().String(),
 			BuildIds:     []string{buildID},
 			TaskQueues:   []string{taskQueue},
@@ -2676,8 +2658,8 @@ func (s *AdvancedVisibilitySuite) checkReachability(ctx context.Context, env *te
 	}, 15*time.Second, 100*time.Millisecond)
 }
 
-func (s *AdvancedVisibilitySuite) getBuildIds(ctx context.Context, env *testcore.TestEnv, execution *commonpb.WorkflowExecution) []string {
-	description, err := env.FrontendClient().DescribeWorkflowExecution(ctx, &workflowservice.DescribeWorkflowExecutionRequest{
+func (s *AdvancedVisibilitySuite) getBuildIds(env *testcore.TestEnv, execution *commonpb.WorkflowExecution) []string {
+	description, err := env.FrontendClient().DescribeWorkflowExecution(s.Context(), &workflowservice.DescribeWorkflowExecutionRequest{
 		Namespace: env.Namespace().String(),
 		Execution: execution,
 	})
@@ -2716,9 +2698,9 @@ func (s *AdvancedVisibilitySuite) updateMaxResultWindow(env *testcore.TestEnv) {
 	s.FailNowf("", "ES max result window size hasn't reach target size within %v", numOfRetry*waitTimeInMs*time.Millisecond)
 }
 
-func (s *AdvancedVisibilitySuite) addCustomKeywordSearchAttribute(ctx context.Context, env *testcore.TestEnv, attrName string) {
+func (s *AdvancedVisibilitySuite) addCustomKeywordSearchAttribute(env *testcore.TestEnv, attrName string) {
 	// Add new search attribute
-	_, err := env.OperatorClient().AddSearchAttributes(ctx, &operatorservice.AddSearchAttributesRequest{
+	_, err := env.OperatorClient().AddSearchAttributes(s.Context(), &operatorservice.AddSearchAttributesRequest{
 		SearchAttributes: map[string]enumspb.IndexedValueType{
 			attrName: enumspb.INDEXED_VALUE_TYPE_KEYWORD,
 		},
@@ -2728,7 +2710,7 @@ func (s *AdvancedVisibilitySuite) addCustomKeywordSearchAttribute(ctx context.Co
 
 	// Wait for search attribute to be available
 	s.Eventually(func() bool {
-		descResp, err := env.OperatorClient().ListSearchAttributes(ctx, &operatorservice.ListSearchAttributesRequest{
+		descResp, err := env.OperatorClient().ListSearchAttributes(s.Context(), &operatorservice.ListSearchAttributesRequest{
 			Namespace: env.Namespace().String(),
 		})
 		if err != nil {
