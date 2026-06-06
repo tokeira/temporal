@@ -41,7 +41,7 @@ func TestTooManyDedicatedWorkerClusters(t *testing.T) {
 	require.True(t, tooManyDedicatedWorkerClusters(8, 5))
 }
 
-func TestPoolMaxUsageRecyclesAfterActiveTest(t *testing.T) {
+func TestPoolMaxUsageRecyclesOnNextAcquire(t *testing.T) {
 	p := newPool(1, false, 1)
 
 	var created int
@@ -58,14 +58,16 @@ func TestPoolMaxUsageRecyclesAfterActiveTest(t *testing.T) {
 		require.Equal(t, 1, p.slots[0].usage)
 	})
 
-	require.Nil(t, p.slots[0].cluster)
+	firstCluster := p.slots[0].cluster
+	require.NotNil(t, firstCluster)
 	require.Equal(t, 0, p.slots[0].active)
-	require.Equal(t, 0, p.slots[0].usage)
+	require.Equal(t, 1, p.slots[0].usage)
 
 	t.Run("recreates cluster", func(t *testing.T) {
 		cluster := p.get(t, createCluster)
 
 		require.Same(t, cluster, p.slots[0].cluster)
+		require.NotSame(t, firstCluster, cluster)
 		require.Equal(t, 2, created)
 	})
 }
@@ -86,14 +88,18 @@ func TestClusterSlotMaxUsageWaitsForActiveLeases(t *testing.T) {
 	require.Equal(t, 2, slot.active)
 	require.Equal(t, 2, slot.usage)
 
-	slot.release(t)
+	slot.release()
 	require.NotNil(t, slot.cluster)
 	require.Equal(t, 1, slot.active)
 
-	slot.release(t)
-	require.Nil(t, slot.cluster)
+	slot.release()
+	require.NotNil(t, slot.cluster)
 	require.Equal(t, 0, slot.active)
-	require.Equal(t, 0, slot.usage)
+	require.Equal(t, 2, slot.usage)
+
+	third := slot.acquire(t, createCluster)
+	require.NotSame(t, first, third)
+	require.Equal(t, 2, created)
 }
 
 func TestSuiteScopedWorkerServiceSharesClusterAndNamespaces(t *testing.T) {

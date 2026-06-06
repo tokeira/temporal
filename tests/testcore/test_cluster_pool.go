@@ -87,7 +87,7 @@ func (p *pool) get(t *testing.T, createCluster func() *FunctionalTestBase) *Func
 
 	cluster := slot.acquire(t, createCluster)
 	t.Cleanup(func() {
-		slot.release(t)
+		slot.release()
 		if p.available != nil {
 			p.available <- slot
 		}
@@ -129,6 +129,9 @@ func (s *clusterSlot) acquire(t *testing.T, createCluster func() *FunctionalTest
 	defer s.mu.Unlock()
 
 	if s.cluster != nil && s.cluster.Poisoned() {
+		if s.active == 0 {
+			s.tearDownLocked(t)
+		}
 		s.cluster = createCluster()
 		s.usage = 0
 	}
@@ -149,16 +152,11 @@ func (s *clusterSlot) acquire(t *testing.T, createCluster func() *FunctionalTest
 	return s.cluster
 }
 
-func (s *clusterSlot) release(t *testing.T) {
+func (s *clusterSlot) release() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.active--
-	if s.active > 0 || s.maxUsage == 0 || s.usage < s.maxUsage || s.cluster == nil {
-		return
-	}
-
-	s.tearDownLocked(t)
 }
 
 func (s *clusterSlot) tearDown(t *testing.T) {
@@ -360,7 +358,7 @@ func (s *suiteRegistry) get(
 		return createCluster(suiteCluster.config.clusterOpts)
 	})
 	t.Cleanup(func() {
-		suiteCluster.slot.release(t)
+		suiteCluster.slot.release()
 	})
 	return cluster
 }
