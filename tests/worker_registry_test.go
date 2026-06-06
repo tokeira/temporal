@@ -23,7 +23,6 @@ type WorkerRegistryTestSuite struct {
 }
 
 func TestWorkerRegistryTestSuite(t *testing.T) {
-	testcore.UseSuiteScopedCluster(t, "reuse worker-service clusters")
 	parallelsuite.Run(t, &WorkerRegistryTestSuite{})
 }
 
