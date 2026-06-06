@@ -60,11 +60,11 @@ type AdvancedVisibilitySuite struct {
 }
 
 func TestAdvancedVisibilitySuite(t *testing.T) {
-	parallelsuite.RunLegacySequential(t, &AdvancedVisibilitySuite{}, true) //nolint:staticcheck // SA1019: suite still requires legacy sequential execution
+	parallelsuite.Run(t, &AdvancedVisibilitySuite{}, true)
 }
 
 func TestAdvancedVisibilitySuiteLegacy(t *testing.T) {
-	parallelsuite.RunLegacySequential(t, &AdvancedVisibilitySuite{}, false) //nolint:staticcheck // SA1019: suite still requires legacy sequential execution
+	parallelsuite.Run(t, &AdvancedVisibilitySuite{}, false)
 }
 
 // newTestEnv creates a TestEnv with the dynamic config this suite needs.
