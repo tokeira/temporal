@@ -1,3 +1,29 @@
+> # Tokeira fork — Temporal functional conformance
+>
+> This is a fork of [`temporalio/temporal`](https://github.com/temporalio/temporal)
+> maintained by the Tokeira project. **It is not a fork of the Temporal server for
+> production use.** Its sole purpose is to run Temporal's own functional test corpus,
+> unmodified, against Tokeira — a Temporal-compatible durable execution engine — as
+> Tier 2 of Tokeira's conformance model.
+>
+> **The conformance work lives on the `tokeira/conformance-v1.31.0` branch**, pinned at
+> Temporal `v1.31.0` to match Tokeira's `TEMPORAL_SERVER_COMPAT` target. This `main`
+> branch tracks upstream Temporal and carries only this notice.
+>
+> **What changes on the conformance branch:** only the test harness boot seam — the
+> onebox (`tests/testcore/onebox.go`) is adapted so the functional tests dial an external
+> `tokeirad` frontend instead of booting Temporal's own services. **No test body is
+> modified**; the corpus runs as published. All other Temporal source is upstream.
+>
+> **Conformance reporting lives in the Tokeira project**, not here: a wire-coverage
+> recorder in Tokeira's edge joins observed RPCs against Tokeira's compatibility matrix to
+> produce the coverage report. This fork stays thin and re-baselines onto each new Temporal
+> release tag.
+>
+> Upstream Temporal's original README follows.
+>
+> ---
+
 <div class="title-block" style="text-align: center;" align="center">
 
 # Temporal—durable execution platform
