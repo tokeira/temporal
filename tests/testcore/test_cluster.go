@@ -130,6 +130,13 @@ func (f *defaultTestClusterFactory) NewCluster(t *testing.T, clusterConfig *Test
 }
 
 func NewTestClusterFactory() TestClusterFactory {
+	// Tokeira Tier-2 conformance seam: when TOKEIRA_CONFORMANCE_FRONTEND_ADDR points at an
+	// external `tokeirad`, return the parallel client-shim factory (tokeira_conformance_cluster.go)
+	// instead of the persistence-backed one. This is the single upstream touch for Option B;
+	// all conformance construction lives in its own file. Absent the env, behaviour is unchanged.
+	if conformanceFrontendAddr() != "" {
+		return &conformanceClusterFactory{}
+	}
 	tbFactory := &defaultPersistenceTestBaseFactory{}
 	return NewTestClusterFactoryWithCustomTestBaseFactory(tbFactory)
 }
@@ -538,6 +545,16 @@ func newArchiverBase(
 
 // TearDownCluster tears down the test cluster
 func (tc *TestCluster) TearDownCluster() error {
+	// Tokeira Tier-2 conformance seam: the client-shim cluster
+	// (tokeira_conformance_cluster.go) builds no persistence test-base and no
+	// archiver base — its testBase carries only MetadataManager and its
+	// archiverBase is nil. The standard teardown below would nil-panic on
+	// testBase.TearDownWorkflowStore() (TaskMgr.Close) and on archiverBase
+	// directory cleanup. Under the seam we only stop the host (closing the gRPC
+	// client connection); `tokeirad`'s own lifecycle is owned by the harness.
+	if conformanceFrontendAddr() != "" {
+		return tc.host.Stop()
+	}
 	errs := tc.host.Stop()
 	tc.testBase.TearDownWorkflowStore()
 	if !UseSQLVisibility() && tc.host.esConfig != nil {
