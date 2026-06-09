@@ -8,8 +8,10 @@ import (
 	"maps"
 	"math/rand"
 	"net"
+	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -63,6 +65,7 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/multierr"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type (
@@ -242,6 +245,17 @@ func newTemporal(t *testing.T, params *TemporalParams) *TemporalImpl {
 }
 
 func (c *TemporalImpl) Start() error {
+	// Tokeira Shape-2 conformance seam: when TOKEIRA_CONFORMANCE_FRONTEND_ADDR points at an
+	// externally-running tokeirad frontend, the onebox must NOT boot Temporal's own services. Instead
+	// it points the standard WorkflowServiceClient at that external address so Temporal's unmodified
+	// functional suite (tests/) runs over the real wire against Tokeira. tokeirad owns its own
+	// namespace bootstrap and serves only the WorkflowService surface, so createSystemNamespace() and
+	// the four start* service boots are skipped. When the env var is absent, behaviour below is
+	// byte-for-byte the default onebox boot.
+	if addr := conformanceFrontendAddr(); addr != "" {
+		return c.startConformanceFrontend(addr)
+	}
+
 	// create temporal-system namespace, this must be created before starting
 	// the services - so directly use the metadataManager to create this
 	if err := c.createSystemNamespace(); err != nil {
@@ -251,6 +265,37 @@ func (c *TemporalImpl) Start() error {
 	c.startHistory()
 	c.startFrontend()
 	c.startWorker()
+
+	return nil
+}
+
+// conformanceFrontendAddr returns the external tokeirad frontend gRPC address configured for the
+// Tokeira Tier-2 (Shape-2) functional-conformance seam, or "" when the default onebox boot applies.
+func conformanceFrontendAddr() string {
+	return strings.TrimSpace(os.Getenv("TOKEIRA_CONFORMANCE_FRONTEND_ADDR"))
+}
+
+// startConformanceFrontend wires the onebox to an externally-running tokeirad frontend instead of
+// booting Temporal's matching/history/frontend/worker services. It records the external address into
+// the host map so FrontendGRPCAddress() / RemoteFrontendGRPCAddress() resolve to tokeirad, dials a
+// plaintext gRPC connection to it (tokeirad is a local test harness process, so insecure transport
+// credentials are appropriate), and builds the standard WorkflowServiceClient that every functional
+// test reaches through FrontendClient(). adminClient/operatorClient/historyClient/matchingClient are
+// deliberately left unset: tokeirad does not serve those surfaces, and tests that touch them are
+// classified out-of-public-scope in the Tier-2 report rather than blocking this seam.
+func (c *TemporalImpl) startConformanceFrontend(addr string) error {
+	hostMap := maps.Clone(c.hostsByProtocolByService[grpcProtocol])
+	hostMap[primitives.FrontendService] = static.Hosts{All: []string{addr}, Self: addr}
+	c.hostsByProtocolByService[grpcProtocol] = hostMap
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return fmt.Errorf("tokeira conformance: dial external frontend %q: %w", addr, err)
+	}
+	c.frontendClient = workflowservice.NewWorkflowServiceClient(conn)
+
+	// SDK-style callers resolve the frontend through this address rather than membership.
+	c.frontendMembershipAddress = addr
 
 	return nil
 }
