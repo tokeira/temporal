@@ -332,6 +332,7 @@ func (s *FunctionalTestBase) setupCluster(options ...TestClusterOption) {
 // into partitions. Otherwise, the test suite will be executed multiple times
 // in each partition.
 func (s *FunctionalTestBase) SetupTest() {
+	s.maybeSkipForConformance()
 	s.checkTestShard()
 	s.initAssertions()
 	s.setupSdk()
@@ -344,6 +345,7 @@ func (s *FunctionalTestBase) SetupTest() {
 }
 
 func (s *FunctionalTestBase) SetupSubTest() {
+	s.maybeSkipForConformance()
 	s.initAssertions()
 }
 

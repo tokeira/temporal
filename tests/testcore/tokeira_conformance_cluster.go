@@ -46,6 +46,7 @@ import (
 	persistencetests "go.temporal.io/server/common/persistence/persistence-tests"
 	"go.temporal.io/server/common/primitives"
 	"go.temporal.io/server/common/testing/grpcinject"
+	"go.temporal.io/server/common/testing/testhooks"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -157,6 +158,14 @@ func newConformanceCluster(
 		// annotate outgoing RPCs with the test name; setupSdk also reads it for dial options.
 		// The shim must supply a real (initially no-op) interceptor or those calls nil-panic.
 		grpcClientInterceptor: grpcinject.NewInterceptor(),
+		// InjectHook (used by *_Batching tests) stores into this in-process registry via
+		// `c.testHooks.data.Store`; the zero-value `TestHooks` has a nil map and would
+		// nil-panic. A real registry makes InjectHook a harmless no-op: the hook is an
+		// in-process server knob (e.g. `TaskQueuesInDeploymentSyncBatchSize`) that cannot
+		// reach the out-of-process `tokeirad`, so the test still verifies observable
+		// behaviour while the batch-size override is simply ignored (same posture as
+		// dynamic-config overrides against an external server).
+		testHooks: testhooks.NewTestHooks(),
 		hostsByProtocolByService: map[transferProtocol]map[primitives.ServiceName]static.Hosts{
 			grpcProtocol: {primitives.FrontendService: {All: []string{addr}, Self: addr}},
 			httpProtocol: {primitives.FrontendService: {All: []string{addr}, Self: addr}},
