@@ -74,6 +74,26 @@ func (f *conformanceClusterFactory) NewCluster(
 	return newConformanceCluster(t, clusterConfig, logger)
 }
 
+// conformanceServiceErrorInterceptor mirrors Temporal's client-side `errorInterceptor`
+// (`common/rpc/grpc.go @ v1.31.0`): it converts the raw gRPC status returned by the
+// invoker into the corresponding typed `*serviceerror.*`, so the unmodified functional
+// corpus's `ErrorAs(err, &*serviceerror.X)` assertions resolve as they do against a real
+// Temporal frontend.
+func conformanceServiceErrorInterceptor(
+	ctx context.Context,
+	method string,
+	req, reply any,
+	cc *grpc.ClientConn,
+	invoker grpc.UnaryInvoker,
+	opts ...grpc.CallOption,
+) error {
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	if err == nil {
+		return nil
+	}
+	return serviceerror.FromStatus(status.Convert(err))
+}
+
 // newConformanceCluster builds a client-shim TestCluster fronting an external `tokeirad`.
 //
 // It dials the address from TOKEIRA_CONFORMANCE_FRONTEND_ADDR (set by the harness via
@@ -92,7 +112,17 @@ func newConformanceCluster(
 		)
 	}
 
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Convert gRPC statuses into typed `*serviceerror.*` on the client, exactly as
+	// Temporal's real client does (`errorInterceptor` in common/rpc/grpc.go @ v1.31.0:
+	// `serviceerror.FromStatus(status.Convert(err))`). Without this the shim returns raw
+	// `*status.Error`, so functional tests doing `ErrorAs(err, &*serviceerror.X)` fail on
+	// typing even when the server returns the correct code and message. Matching the real
+	// client's behaviour keeps the shim transparent to the unmodified corpus.
+	conn, err := grpc.NewClient(
+		addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(conformanceServiceErrorInterceptor),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("tokeira conformance: dial frontend %q: %w", addr, err)
 	}
