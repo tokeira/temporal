@@ -1,6 +1,9 @@
 package testcore
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // Conformance skip registry.
 //
@@ -58,6 +61,24 @@ var conformanceSkips = []conformanceSkip{
 			"via signal — an internal-surface representation tokeira does not model, not a " +
 			"public API behaviour",
 	},
+	{
+		nameContains: "TestStandaloneActivityTestSuite/TestStart/RequestValidations/InputTooLarge",
+		reason: "asserts at an OverrideDynamicConfig(BlobSizeLimitError=1000) value; tokeira " +
+			"represents the limit as the pinned-release constant and does not accept dynamic-config " +
+			"injection over the wire, so the 1001-byte input cannot trip the constant default",
+	},
+	{
+		nameContains: "TestStandaloneActivityTestSuite/TestRequestCancel/RequestValidations/ReasonTooLong",
+		reason: "asserts at an OverrideDynamicConfig(BlobSizeLimitError=1000) value; tokeira " +
+			"represents the limit as the pinned-release constant and does not accept dynamic-config " +
+			"injection over the wire, so the 1001-byte reason cannot trip the constant default",
+	},
+	{
+		nameContains: "TestStandaloneActivityTestSuite/TestTerminate/RequestValidations/ReasonTooLong",
+		reason: "asserts at an OverrideDynamicConfig(BlobSizeLimitError=1000) value; tokeira " +
+			"represents the limit as the pinned-release constant and does not accept dynamic-config " +
+			"injection over the wire, so the 1001-byte reason cannot trip the constant default",
+	},
 }
 
 // conformanceSkipReason returns the skip reason for a test name when one is
@@ -80,4 +101,61 @@ func (s *FunctionalTestBase) maybeSkipForConformance() {
 	if reason, ok := conformanceSkipReason(s.T().Name()); ok {
 		s.T().Skipf("tokeira conformance: skipping %s — %s", s.T().Name(), reason)
 	}
+}
+
+// ConformanceSkipRegexp builds the `go test -skip` regular expression that skips
+// every registered out-of-scope test under the given top-level entrypoint (the
+// `^Name$` the run-all runner isolates per process). It returns "" when no
+// registered skip targets that entrypoint.
+//
+// Why a `-skip` regexp and not the SetupTest/SetupSubTest hook above: testify
+// only invokes SetupSubTest from suite.Run, but most corpus suites nest their
+// cases with the standard library's raw t.Run, which testify cannot intercept —
+// so maybeSkipForConformance never fires inside such a sub-test. `go test -skip`
+// (Go 1.20+) skips by name at the testing layer regardless of how the sub-test
+// was started, and — verified — skips only the matched leaf, never its parent or
+// siblings. The two mechanisms are complementary: the hook gives a per-test Skip
+// message for whole methods / s.Run sub-tests, the regexp reaches raw t.Run ones.
+//
+// Positional matching. `go test` splits both the test identifier and the skip
+// regexp on unbracketed '/', matching element-by-element. Entries under one
+// entrypoint are therefore merged into a per-position alternation (each element
+// anchored and de-duplicated). When entries differ in two or more positions this
+// admits phantom cross-products (A/x + B/y also matches A/y), but those name a
+// test that does not exist, so they are inert — and a wrongly-skipped *real* test
+// would surface as a `skip` outcome the ledger gate must classify, so the curated
+// registry cannot silently over-skip. Entries under one entrypoint are assumed to
+// share depth (they do today: per-method or per-leaf, never mixed).
+func ConformanceSkipRegexp(entrypoint string) string {
+	var positions [][]string
+	seen := []map[string]bool{}
+	for _, skip := range conformanceSkips {
+		parts := strings.Split(skip.nameContains, "/")
+		if len(parts) == 0 || parts[0] != entrypoint {
+			continue
+		}
+		for i, part := range parts {
+			for len(positions) <= i {
+				positions = append(positions, nil)
+				seen = append(seen, map[string]bool{})
+			}
+			elem := "^" + regexp.QuoteMeta(part) + "$"
+			if !seen[i][elem] {
+				seen[i][elem] = true
+				positions[i] = append(positions[i], elem)
+			}
+		}
+	}
+	if len(positions) == 0 {
+		return ""
+	}
+	elems := make([]string, len(positions))
+	for i, alts := range positions {
+		if len(alts) == 1 {
+			elems[i] = alts[0]
+		} else {
+			elems[i] = "(?:" + strings.Join(alts, "|") + ")"
+		}
+	}
+	return strings.Join(elems, "/")
 }

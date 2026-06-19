@@ -58,6 +58,7 @@ import (
 	"time"
 
 	"go.temporal.io/api/workflowservice/v1"
+	"go.temporal.io/server/tests/testcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -91,6 +92,13 @@ const (
 	// whole corpus; an entrypoint that exceeds it is killed by `go test` and
 	// recorded as a failure (data), and the runner moves on to the next.
 	perTestTimeout = 5 * time.Minute
+
+	// conformanceGoToolchain pins the Go toolchain for every `go test` the runner
+	// spawns, so the corpus is exercised on the version its go.mod requires
+	// (matching TEMPORAL_SERVER_COMPAT's release) rather than whatever `go` is
+	// first on PATH. `GOTOOLCHAIN=auto` would honour the go.mod directive too, but
+	// pinning explicitly makes the version deterministic and visible.
+	conformanceGoToolchain = "go1.26.2"
 )
 
 func main() {
@@ -236,10 +244,19 @@ func runEntrypoint(addr, name string, results io.Writer) entrypointOutcome {
 		"-count=1",
 		"-timeout", perTestTimeout.String(),
 		"-run", "^" + name + "$",
-		corpusPattern,
 	}
+	// Skip the registered out-of-scope sub-tests under this entrypoint (raw t.Run
+	// cases testify's SetupSubTest cannot intercept — e.g. dynamic-config-override
+	// assertions). `-skip` excludes only the named leaves, never their siblings;
+	// the skipped outcomes still appear in the -json stream for the ledger.
+	if skip := testcore.ConformanceSkipRegexp(name); skip != "" {
+		args = append(args, "-skip", skip)
+	}
+	args = append(args, corpusPattern)
 	cmd := exec.Command("go", args...)
-	cmd.Env = append(os.Environ(), seamAddrEnv+"="+addr)
+	// Pin the toolchain to the version the corpus's go.mod requires so runs do not
+	// silently use whatever `go` is first on PATH.
+	cmd.Env = append(os.Environ(), seamAddrEnv+"="+addr, "GOTOOLCHAIN="+conformanceGoToolchain)
 	cmd.Stdout = io.MultiWriter(results, os.Stdout)
 	cmd.Stderr = os.Stderr
 
@@ -269,7 +286,7 @@ func runEntrypoint(addr, name string, results io.Writer) entrypointOutcome {
 // builds against the same configuration the run uses.
 func listEntrypoints(addr string) ([]string, error) {
 	cmd := exec.Command("go", "test", "-tags", "test_dep", "-list", ".*", corpusPattern)
-	cmd.Env = append(os.Environ(), seamAddrEnv+"="+addr)
+	cmd.Env = append(os.Environ(), seamAddrEnv+"="+addr, "GOTOOLCHAIN="+conformanceGoToolchain)
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
 	if err != nil {
