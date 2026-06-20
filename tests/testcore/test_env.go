@@ -135,6 +135,11 @@ func WithTimeout(duration time.Duration) TestOption {
 func NewEnv(t *testing.T, opts ...TestOption) *TestEnv {
 	t.Helper()
 
+	// Conformance mode: skip registered out-of-scope tests here, because
+	// parallelsuite-based suites invoke test methods directly (no SetupTest hook),
+	// and NewEnv is the first call every such test makes. No-op otherwise.
+	maybeSkipTestForConformance(t)
+
 	// Check test sharding early, before any expensive operations.
 	checkTestShard(t)
 

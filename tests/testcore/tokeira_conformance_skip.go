@@ -3,6 +3,7 @@ package testcore
 import (
 	"regexp"
 	"strings"
+	"testing"
 )
 
 // Conformance skip registry.
@@ -17,8 +18,10 @@ import (
 // unaffected.
 //
 // Each entry records WHY the test is out of scope so the skip is auditable.
-// Keys are matched as substrings of `t.Name()` (which is
-// `Suite/Test[/subtest]`), so a parent name skips its subtests too.
+// `nameContains` matches `t.Name()` on path-segment boundaries (see
+// conformanceSkipReason): the exact test, or any sub-test beneath it
+// (`Name/...`). A parent name therefore skips its sub-tests, but a leaf never
+// skips a sibling that merely shares a textual prefix.
 
 type conformanceSkip struct {
 	// nameContains matches against the full `t.Name()`.
@@ -79,13 +82,70 @@ var conformanceSkips = []conformanceSkip{
 			"represents the limit as the pinned-release constant and does not accept dynamic-config " +
 			"injection over the wire, so the 1001-byte reason cannot trip the constant default",
 	},
+
+	// --- TestNexusWorkflowTestSuite: leaves that depend on in-process-only test
+	// facilities unavailable against an out-of-process tokeirad. These are harness
+	// incompatibilities, NOT tokeira conformance gaps. The async-completion-callback
+	// behaviour they also exercise (HTTP error matrix, token validation, idempotency,
+	// history progression) is covered by tokeira-owned behavioural tests instead,
+	// because the corpus assertions are interleaved with the in-process metric capture.
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletion",
+		reason: "uses the in-process metrics CaptureHandler (Host().CaptureMetricsHandler(), " +
+			"nil out-of-process — panics) via sendNexusCompletionRequest; the capture taps the " +
+			"server's in-memory metric emissions, which a separate-process tokeirad cannot share",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionAfterReset",
+		reason:       "in-process metrics CaptureHandler via sendNexusCompletionRequest (nil out-of-process)",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncFailure",
+		reason:       "in-process metrics CaptureHandler via sendNexusCompletionRequest (nil out-of-process)",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionErrors",
+		reason: "in-process metrics CaptureHandler (Host().CaptureMetricsHandler()) via " +
+			"sendNexusCompletionRequest (nil out-of-process)",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionAuthErrors",
+		reason: "uses the in-process auth hook Host().SetOnAuthorize and the in-process metrics " +
+			"CaptureHandler — neither exists against an out-of-process tokeirad",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionAuthErrorsNoIdentifier",
+		reason: "uses the in-process auth hook Host().SetOnAuthorize and the in-process metrics " +
+			"CaptureHandler — neither exists against an out-of-process tokeirad",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionInternalAuth",
+		reason: "requires OverrideDynamicConfig; tokeira does not accept dynamic-config injection " +
+			"over the wire (config-as-constant)",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusSyncOperationErrorRehydration",
+		reason:       "in-process metrics CaptureHandler (Host().CaptureMetricsHandler(), nil out-of-process)",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusAsyncOperationErrorRehydration",
+		reason:       "in-process metrics CaptureHandler (Host().CaptureMetricsHandler(), nil out-of-process)",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationSyncNexusFailure",
+		reason:       "in-process metrics CaptureHandler (Host().CaptureMetricsHandler(), nil out-of-process)",
+	},
 }
 
 // conformanceSkipReason returns the skip reason for a test name when one is
-// registered, and whether a match was found.
+// registered, and whether a match was found. A registered name matches the test
+// itself (exact) or any of its sub-tests (the registered name followed by "/...").
+// Matching is on path-segment boundaries, NOT raw substring, so a registered leaf
+// never accidentally skips a sibling whose name merely shares a textual prefix
+// (e.g. registering `…AsyncCompletion` must not skip `…AsyncCompletionBeforeStart`).
 func conformanceSkipReason(testName string) (string, bool) {
 	for _, skip := range conformanceSkips {
-		if strings.Contains(testName, skip.nameContains) {
+		if testName == skip.nameContains || strings.HasPrefix(testName, skip.nameContains+"/") {
 			return skip.reason, true
 		}
 	}
@@ -95,11 +155,22 @@ func conformanceSkipReason(testName string) (string, bool) {
 // maybeSkipForConformance skips the current test when conformance mode is active
 // and the test is in the skip registry. A no-op outside conformance mode.
 func (s *FunctionalTestBase) maybeSkipForConformance() {
+	maybeSkipTestForConformance(s.T())
+}
+
+// maybeSkipTestForConformance is the `testing.TB`-based skip used by entry points
+// that are not `FunctionalTestBase` methods — notably [NewEnv], which every
+// `testEnv`/`parallelsuite` test calls first. That path matters because
+// `parallelsuite.Run` invokes test methods directly and never calls `SetupTest`,
+// so the method hook above never fires for those suites; gating in `NewEnv`
+// ensures a registered skip takes effect on a plain `go test` invocation (not only
+// under the run-all runner's `-skip`). A no-op outside conformance mode.
+func maybeSkipTestForConformance(t testing.TB) {
 	if conformanceFrontendAddr() == "" {
 		return
 	}
-	if reason, ok := conformanceSkipReason(s.T().Name()); ok {
-		s.T().Skipf("tokeira conformance: skipping %s — %s", s.T().Name(), reason)
+	if reason, ok := conformanceSkipReason(t.Name()); ok {
+		t.Skipf("tokeira conformance: skipping %s — %s", t.Name(), reason)
 	}
 }
 
