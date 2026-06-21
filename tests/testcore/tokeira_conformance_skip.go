@@ -159,6 +159,29 @@ var conformanceSkips = []conformanceSkip{
 			"handler-workflow close); tokeira ships empty callback fields and does not invoke " +
 			"completion callbacks yet — tracked C4b gap, not a conformance claim",
 	},
+
+	// --- TestNexusWorkflowTestSuite: assertions on tokeira-internal / out-of-claim
+	// surfaces, not public Nexus behaviour.
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationSyncCompletion",
+		reason: "the PUBLIC sync-completion behaviour PASSES (NexusOperationCompleted event, the " +
+			"handler Nexus-Link carried onto the event with its event_type, and the result " +
+			"round-trip to \"result\"); the test THEN white-box-inspects HSM SubStateMachinesByType " +
+			"deletion via the internal temporal.server.api.adminservice.v1.AdminService/" +
+			"DescribeMutableState (with chasm.WorkflowArchetype). tokeira does not serve that " +
+			"internal AdminService (its own coverage classifies AdminService as beyond-claim) and " +
+			"has no HSM sub-state-machine model, so the response is absent; s.NoError is non-fatal, " +
+			"so the next line nil-derefs and PANICS, aborting the parallel suite. Skipped so the " +
+			"rest of the suite runs; the assertion is outside tokeira's public v1.31.0 claim. " +
+			"Segment-boundary matching keeps this from skipping TestNexusOperationSyncCompletion_LargePayload.",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationSystemEndpoint",
+		reason: "DEFERRED GAP: exercises the __temporal_system internal endpoint, which v1.31.0 " +
+			"dispatches in-process via startOnHistoryService (NOT over HTTP). tokeira's outbound " +
+			"Nexus client covers External HTTP endpoints only; the internal system-endpoint surface " +
+			"is deferred and tracked separately — not a public-HTTP-Nexus conformance claim",
+	},
 }
 
 // conformanceSkipReason returns the skip reason for a test name when one is
