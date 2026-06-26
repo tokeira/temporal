@@ -100,14 +100,6 @@ var conformanceSkips = []conformanceSkip{
 	//     callback-token wire format + StateMachineRef staleness; see each reason).
 	//   - AUTH leaves: need the in-process Host().SetOnAuthorize hook, absent out-of-process.
 	{
-		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationSyncNexusFailure",
-		reason: "DEFERRED tokeira behaviour gap (the metrics bridge supplies nexus_outbound_requests; " +
-			"NOT a metric-capture limit): the caller workflow does not rehydrate an External Nexus " +
-			"handler error into the NexusOperationError -> HandlerError -> ApplicationError(+details) " +
-			"chain the test asserts (nexus_workflow_test.go:2524-2535). Nexus error-chain fidelity " +
-			"work, tracked; remove when it lands.",
-	},
-	{
 		nameContains: "TestNexusWorkflowTestSuite/TestNexusSyncOperationErrorRehydration",
 		reason: "DEFERRED tokeira behaviour gap (the metrics bridge supplies nexus_outbound_requests): " +
 			"requires DescribeWorkflowExecution.PendingNexusOperations[].LastAttemptFailure rehydration, " +
