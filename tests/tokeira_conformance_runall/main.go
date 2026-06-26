@@ -72,6 +72,13 @@ const (
 	// When already set, the runner reuses that frontend; otherwise it exports
 	// the address of the frontend it boots so the corpus resolves to it.
 	seamAddrEnv = "TOKEIRA_CONFORMANCE_FRONTEND_ADDR"
+	// metricsAddrEnv carries the tokeirad Prometheus /metrics host:port to the corpus
+	// (read by the conformance cluster's metrics bridge). The runner exports it for a
+	// frontend it boots; in reuse mode it passes through whatever the operator set, so a
+	// long-lived operator-managed tokeirad can opt into the metrics bridge by exporting it.
+	// Mirrors tokeira_metrics_bridge.go's tokeiraMetricsAddrEnv (duplicated like seamAddrEnv
+	// rather than imported — this standalone command does not depend on the test package).
+	metricsAddrEnv = "TOKEIRA_CONFORMANCE_METRICS_ADDR"
 	// resultsPathEnv optionally overrides where the machine-readable `go test
 	// -json` event stream is written. Task 8.2 consumes this stream to build the
 	// per-test ledger; 8.1 only needs to produce it faithfully.
@@ -154,7 +161,15 @@ func run() error {
 		resultsPath = defaultResultsPath
 	}
 
-	return runCorpus(addr, resultsPath)
+	// The metrics bridge needs tokeirad's /metrics address. For a frontend we booted,
+	// that is the port we assigned; in reuse mode it is whatever the operator exported
+	// (empty disables the bridge, leaving metric-asserting tests to fail honestly).
+	metricsAddr := os.Getenv(metricsAddrEnv)
+	if proc != nil {
+		metricsAddr = proc.metricsAddr
+	}
+
+	return runCorpus(addr, metricsAddr, resultsPath)
 }
 
 // runCorpus enumerates the complete set of top-level entrypoints in the pinned
@@ -180,7 +195,7 @@ func run() error {
 // Failing or panicking entrypoints are expected (failures are data) and never
 // become a harness error; runCorpus returns an error only for harness-level
 // faults (enumeration failed, empty corpus, results file unwritable).
-func runCorpus(addr, resultsPath string) error {
+func runCorpus(addr, metricsAddr, resultsPath string) error {
 	entrypoints, err := listEntrypoints(addr)
 	if err != nil {
 		return err
@@ -205,7 +220,7 @@ func runCorpus(addr, resultsPath string) error {
 	var ran, failed int
 	for i, name := range entrypoints {
 		fmt.Printf("tokeira-conformance-runall: [%d/%d] %s\n", i+1, len(entrypoints), name)
-		if runEntrypoint(addr, name, results) == entrypointFailed {
+		if runEntrypoint(addr, metricsAddr, name, results) == entrypointFailed {
 			failed++
 		}
 		ran++
@@ -236,7 +251,7 @@ const (
 // crash are both expected outcomes recorded as data; only the coarse outcome is
 // returned for the operator tally. The process is fully isolated, so a panic
 // here cannot affect any other entrypoint.
-func runEntrypoint(addr, name string, results io.Writer) entrypointOutcome {
+func runEntrypoint(addr, metricsAddr, name string, results io.Writer) entrypointOutcome {
 	args := []string{
 		"test",
 		"-tags", "test_dep",
@@ -257,6 +272,11 @@ func runEntrypoint(addr, name string, results io.Writer) entrypointOutcome {
 	// Pin the toolchain to the version the corpus's go.mod requires so runs do not
 	// silently use whatever `go` is first on PATH.
 	cmd.Env = append(os.Environ(), seamAddrEnv+"="+addr, "GOTOOLCHAIN="+conformanceGoToolchain)
+	// Hand the corpus tokeirad's /metrics address so the conformance cluster stands up the
+	// scrape-backed CaptureMetricsHandler for metric-asserting tests; omitted when unknown.
+	if metricsAddr != "" {
+		cmd.Env = append(cmd.Env, metricsAddrEnv+"="+metricsAddr)
+	}
 	cmd.Stdout = io.MultiWriter(results, os.Stdout)
 	cmd.Stderr = os.Stderr
 
@@ -311,8 +331,9 @@ func listEntrypoints(addr string) ([]string, error) {
 // depending on it, because that harness is built around *testing.T and belongs
 // to the test binary, not this standalone command.
 type tokeiradProcess struct {
-	cmd  *exec.Cmd
-	addr string
+	cmd         *exec.Cmd
+	addr        string
+	metricsAddr string
 }
 
 // bootTokeirad launches `tokeirad` on a free loopback port with a minimal
@@ -324,13 +345,23 @@ func bootTokeirad(bin string) (*tokeiradProcess, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A second free port for tokeirad's Prometheus /metrics endpoint so the corpus's
+	// metrics bridge can scrape it (metrics_enabled defaults true). Distinct from the
+	// default 0.0.0.0:9090 to keep parallel runs from colliding.
+	metricsAddr, err := freeLoopbackAddr()
+	if err != nil {
+		return nil, err
+	}
 
 	dir, err := os.MkdirTemp("", "tokeira-conformance-runall")
 	if err != nil {
 		return nil, fmt.Errorf("create temp config dir: %w", err)
 	}
 	cfgPath := filepath.Join(dir, "tokeirad-conformance.toml")
-	cfg := fmt.Sprintf("[infrastructure.network]\ngrpc_addr = %q\n", addr)
+	cfg := fmt.Sprintf(
+		"[infrastructure.network]\ngrpc_addr = %q\nmetrics_addr = %q\n",
+		addr, metricsAddr,
+	)
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
 		return nil, fmt.Errorf("write tokeirad config %q: %w", cfgPath, err)
 	}
@@ -342,7 +373,7 @@ func bootTokeirad(bin string) (*tokeiradProcess, error) {
 		return nil, fmt.Errorf("start tokeirad %q: %w", bin, err)
 	}
 
-	return &tokeiradProcess{cmd: cmd, addr: addr}, nil
+	return &tokeiradProcess{cmd: cmd, addr: addr, metricsAddr: metricsAddr}, nil
 }
 
 // stop terminates the `tokeirad` subprocess: SIGTERM first to let it drain, then

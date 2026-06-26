@@ -33,6 +33,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 
 	"go.temporal.io/api/operatorservice/v1"
@@ -42,6 +43,7 @@ import (
 	"go.temporal.io/server/common/dynamicconfig"
 	"go.temporal.io/server/common/log"
 	"go.temporal.io/server/common/membership/static"
+	"go.temporal.io/server/common/metrics/metricstest"
 	"go.temporal.io/server/common/persistence"
 	persistencetests "go.temporal.io/server/common/persistence/persistence-tests"
 	"go.temporal.io/server/common/primitives"
@@ -171,6 +173,17 @@ func newConformanceCluster(
 			httpProtocol: {primitives.FrontendService: {All: []string{addr}, Self: addr}},
 		},
 		frontendMembershipAddress: addr,
+	}
+
+	// Tier-2 metrics bridge: when the harness exported tokeirad's /metrics address, install
+	// a CaptureMetricsHandler backed by a scrape-and-diff source so metric-asserting corpus
+	// tests (e.g. the Nexus outbound-request tests) observe tokeira's genuine emissions
+	// under Temporal metric names. Absent the env (no metrics port, or a pinned external
+	// frontend without one), captureMetricsHandler stays nil exactly as before.
+	if metricsAddr := os.Getenv(tokeiraMetricsAddrEnv); metricsAddr != "" {
+		host.captureMetricsHandler = metricstest.NewCaptureHandlerWithSource(
+			newTokeiraMetricsScrapeSource("http://" + metricsAddr + "/metrics"),
+		)
 	}
 
 	return &TestCluster{testBase: testBase, host: host}, nil

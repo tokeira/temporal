@@ -40,6 +40,11 @@ type TokeiradProcess struct {
 	// serve on. It is the value a test injects into the onebox seam via
 	// SetFrontendEnv (TOKEIRA_CONFORMANCE_FRONTEND_ADDR).
 	Addr string
+	// MetricsAddr is the 127.0.0.1:<port> address `tokeirad` serves its Prometheus
+	// /metrics endpoint on (infrastructure.network.metrics_addr). The Tier-2 metrics
+	// bridge scrapes it to feed the corpus CaptureMetricsHandler for metric-asserting
+	// tests; SetFrontendEnv exports it as TOKEIRA_CONFORMANCE_METRICS_ADDR.
+	MetricsAddr string
 }
 
 // tokeiradBinEnv names the env var holding the path to a prebuilt `tokeirad`
@@ -80,12 +85,22 @@ func StartTokeirad(t *testing.T) *TokeiradProcess {
 		addr = freeLoopbackAddr(t)
 	}
 
-	// tokeirad reads its frontend bind address from infrastructure.network.grpc_addr.
-	// A minimal TOML file is sufficient because every other field has a default,
-	// and the default storage is in-memory (ConfigStorageKind::InMemory), which is
-	// exactly what the default Tier-2 suite wants.
+	// A second free loopback port for tokeirad's Prometheus /metrics endpoint, so the
+	// Tier-2 metrics bridge can scrape it without colliding with the default 0.0.0.0:9090
+	// across parallel runs. metrics_enabled defaults true, so binding this port serves
+	// /metrics for the renamed-counter scrape.
+	metricsAddr := freeLoopbackAddr(t)
+
+	// tokeirad reads its frontend bind address from infrastructure.network.grpc_addr and
+	// its metrics bind address from infrastructure.network.metrics_addr. A minimal TOML
+	// file is sufficient because every other field has a default, and the default storage
+	// is in-memory (ConfigStorageKind::InMemory), which is exactly what the default Tier-2
+	// suite wants.
 	cfgPath := filepath.Join(t.TempDir(), "tokeirad-conformance.toml")
-	cfg := fmt.Sprintf("[infrastructure.network]\ngrpc_addr = %q\n", addr)
+	cfg := fmt.Sprintf(
+		"[infrastructure.network]\ngrpc_addr = %q\nmetrics_addr = %q\n",
+		addr, metricsAddr,
+	)
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
 		t.Fatalf("tokeira conformance: write tokeirad config %q: %v", cfgPath, err)
 	}
@@ -100,7 +115,7 @@ func StartTokeirad(t *testing.T) *TokeiradProcess {
 		t.Fatalf("tokeira conformance: start %q: %v", bin, err)
 	}
 
-	return &TokeiradProcess{cmd: cmd, Addr: addr}
+	return &TokeiradProcess{cmd: cmd, Addr: addr, MetricsAddr: metricsAddr}
 }
 
 // WaitReady blocks until `tokeirad`'s frontend answers a trivial, side-effect-free
@@ -188,6 +203,11 @@ func (p *TokeiradProcess) Stop(t *testing.T) {
 func (p *TokeiradProcess) SetFrontendEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv(tokeiraFrontendAddrEnv, p.Addr)
+	// Pair the metrics endpoint with the frontend address so newConformanceCluster can
+	// stand up the scrape-backed CaptureMetricsHandler for metric-asserting tests.
+	if p.MetricsAddr != "" {
+		t.Setenv(tokeiraMetricsAddrEnv, p.MetricsAddr)
+	}
 }
 
 // freeLoopbackAddr returns a currently-free 127.0.0.1:<port> address using the

@@ -83,30 +83,74 @@ var conformanceSkips = []conformanceSkip{
 			"injection over the wire, so the 1001-byte reason cannot trip the constant default",
 	},
 
-	// --- TestNexusWorkflowTestSuite: leaves that depend on in-process-only test
-	// facilities unavailable against an out-of-process tokeirad. These are harness
-	// incompatibilities, NOT tokeira conformance gaps. The async-completion-callback
-	// behaviour they also exercise (HTTP error matrix, token validation, idempotency,
-	// history progression) is covered by tokeira-owned behavioural tests instead,
-	// because the corpus assertions are interleaved with the in-process metric capture.
+	// --- TestNexusWorkflowTestSuite: Nexus metric leaves.
+	//
+	// The scrape-backed metrics bridge (tokeira_metrics_bridge.go) now feeds tokeira's
+	// genuine out-of-process metric emissions into the corpus CaptureMetricsHandler under
+	// Temporal's metric names, so these leaves no longer panic on a nil handler. They remain
+	// skipped for reasons the bridge does NOT address:
+	//
+	//   - OUTBOUND-metric leaves (SyncNexusFailure, Sync/AsyncOperationErrorRehydration): the
+	//     bridge supplies nexus_outbound_requests (emission verified tag-for-tag), but these
+	//     tests ALSO assert tokeira Nexus BEHAVIOUR the engine does not yet satisfy — the
+	//     NexusOperationError -> HandlerError -> ApplicationError chain, StartOperation retry
+	//     classification, and Describe PendingNexusOperations rehydration. DEFERRED behaviour
+	//     gaps, tracked per entry; remove as each lands.
+	//   - COMPLETION-HANDLER metric leaves: a DELIBERATE DEVIATION (Temporal's internal
+	//     callback-token wire format + StateMachineRef staleness; see each reason).
+	//   - AUTH leaves: need the in-process Host().SetOnAuthorize hook, absent out-of-process.
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationSyncNexusFailure",
+		reason: "DEFERRED tokeira behaviour gap (the metrics bridge supplies nexus_outbound_requests; " +
+			"NOT a metric-capture limit): the caller workflow does not rehydrate an External Nexus " +
+			"handler error into the NexusOperationError -> HandlerError -> ApplicationError(+details) " +
+			"chain the test asserts (nexus_workflow_test.go:2524-2535). Nexus error-chain fidelity " +
+			"work, tracked; remove when it lands.",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusSyncOperationErrorRehydration",
+		reason: "DEFERRED tokeira behaviour gap (the metrics bridge supplies nexus_outbound_requests): " +
+			"requires DescribeWorkflowExecution.PendingNexusOperations[].LastAttemptFailure rehydration, " +
+			"StartOperation retry classification (a non-retryable BAD_REQUEST must not retry), and the " +
+			"NexusOperationError chain. Nexus behaviour work, tracked; remove when it lands.",
+	},
+	{
+		nameContains: "TestNexusWorkflowTestSuite/TestNexusAsyncOperationErrorRehydration",
+		reason: "DEFERRED tokeira behaviour gap (the metrics bridge supplies nexus_outbound_requests): " +
+			"the caller workflow must rehydrate the NexusOperationError chain for async operation " +
+			"fail/cancel/terminate/timeout outcomes. Nexus error-chain fidelity work, tracked; remove " +
+			"when it lands.",
+	},
 	{
 		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletion",
-		reason: "uses the in-process metrics CaptureHandler (Host().CaptureMetricsHandler(), " +
-			"nil out-of-process — panics) via sendNexusCompletionRequest; the capture taps the " +
-			"server's in-memory metric emissions, which a separate-process tokeirad cannot share",
+		reason: "Asserts Temporal's internal callback-token wire format (CallbackTokenGenerator / " +
+			"NexusOperationCompletion proto) and StateMachineRef.MachineInitialVersionedTransition " +
+			"staleness — an internal representation tokeira deliberately does not adopt (opaque " +
+			"versioned token + op-fencing, nexus.rs:523). The observable contract is covered by " +
+			"tokeira-owned behavioural tests.",
 	},
 	{
 		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionAfterReset",
-		reason:       "in-process metrics CaptureHandler via sendNexusCompletionRequest (nil out-of-process)",
+		reason: "Asserts Temporal's internal callback-token wire format (CallbackTokenGenerator / " +
+			"NexusOperationCompletion proto) via sendNexusCompletionRequest — same DELIBERATE " +
+			"DEVIATION as TestNexusOperationAsyncCompletion (opaque versioned token + op-fencing, " +
+			"nexus.rs:523). The observable contract is covered by tokeira-owned behavioural tests.",
 	},
 	{
 		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncFailure",
-		reason:       "in-process metrics CaptureHandler via sendNexusCompletionRequest (nil out-of-process)",
+		reason: "Asserts Temporal's internal callback-token wire format (CallbackTokenGenerator / " +
+			"NexusOperationCompletion proto) and StateMachineRef.MachineInitialVersionedTransition " +
+			"staleness — an internal representation tokeira deliberately does not adopt (opaque " +
+			"versioned token + op-fencing, nexus.rs:523). The observable contract is covered by " +
+			"tokeira-owned behavioural tests.",
 	},
 	{
 		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionErrors",
-		reason: "in-process metrics CaptureHandler (Host().CaptureMetricsHandler()) via " +
-			"sendNexusCompletionRequest (nil out-of-process)",
+		reason: "Asserts Temporal's internal callback-token wire format (CallbackTokenGenerator / " +
+			"NexusOperationCompletion proto) and StateMachineRef.MachineInitialVersionedTransition " +
+			"staleness — an internal representation tokeira deliberately does not adopt (opaque " +
+			"versioned token + op-fencing, nexus.rs:523). The observable contract is covered by " +
+			"tokeira-owned behavioural tests.",
 	},
 	{
 		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionAuthErrors",
@@ -124,21 +168,13 @@ var conformanceSkips = []conformanceSkip{
 			"over the wire (config-as-constant)",
 	},
 	{
-		nameContains: "TestNexusWorkflowTestSuite/TestNexusSyncOperationErrorRehydration",
-		reason:       "in-process metrics CaptureHandler (Host().CaptureMetricsHandler(), nil out-of-process)",
-	},
-	{
-		nameContains: "TestNexusWorkflowTestSuite/TestNexusAsyncOperationErrorRehydration",
-		reason:       "in-process metrics CaptureHandler (Host().CaptureMetricsHandler(), nil out-of-process)",
-	},
-	{
-		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationSyncNexusFailure",
-		reason:       "in-process metrics CaptureHandler (Host().CaptureMetricsHandler(), nil out-of-process)",
-	},
-	{
 		nameContains: "TestNexusWorkflowTestSuite/TestNexusCallbackAfterCallerComplete",
-		reason: "in-process metrics CaptureHandler (Host().CaptureMetricsHandler().StopCapture, " +
-			"nil out-of-process) — harness incompatibility, not a tokeira gap",
+		reason: "DEFERRED tokeira behaviour gap (NOT a metric test — it makes no nexus_outbound_requests " +
+			"assertion; the prior 'metrics CaptureHandler' reason was inaccurate): asserts " +
+			"DescribeWorkflowExecution.Callbacks[0].State == CALLBACK_STATE_FAILED and LastAttemptFailure " +
+			"(nexus_workflow_test.go:2455-2458), the completion-callback Describe surface tokeira does not " +
+			"yet populate (UNSUPPORTED_FIELDS.md: callbacks Empty). Callback-lifecycle Describe work, " +
+			"tracked; remove when it lands.",
 	},
 
 	// --- TestNexusWorkflowTestSuite: DEFERRED tokeira conformance GAP (not a harness
