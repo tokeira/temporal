@@ -90,28 +90,28 @@ var conformanceSkips = []conformanceSkip{
 	// Temporal's metric names, so these leaves no longer panic on a nil handler. They remain
 	// skipped for reasons the bridge does NOT address:
 	//
-	//   - OUTBOUND-metric leaves (SyncNexusFailure, Sync/AsyncOperationErrorRehydration): the
-	//     bridge supplies nexus_outbound_requests (emission verified tag-for-tag), but these
-	//     tests ALSO assert tokeira Nexus BEHAVIOUR the engine does not yet satisfy — the
-	//     NexusOperationError -> HandlerError -> ApplicationError chain, StartOperation retry
-	//     classification, and Describe PendingNexusOperations rehydration. DEFERRED behaviour
-	//     gaps, tracked per entry; remove as each lands.
+	//   - OUTBOUND-metric leaf (AsyncOperationErrorRehydration): the bridge supplies
+	//     nexus_outbound_requests (emission verified tag-for-tag, scoped per namespace), but
+	//     the test ALSO asserts async-completion BEHAVIOUR the engine does not yet satisfy.
+	//     DEFERRED behaviour gap, tracked on the entry. (SyncNexusFailure and
+	//     SyncOperationErrorRehydration have landed — the latter via the kernel Nexus-op
+	//     invocation-retry state machine, .kiro/specs/nexus-retry-policy.)
 	//   - COMPLETION-HANDLER metric leaves: a DELIBERATE DEVIATION (Temporal's internal
 	//     callback-token wire format + StateMachineRef staleness; see each reason).
 	//   - AUTH leaves: need the in-process Host().SetOnAuthorize hook, absent out-of-process.
 	{
-		nameContains: "TestNexusWorkflowTestSuite/TestNexusSyncOperationErrorRehydration",
-		reason: "DEFERRED tokeira behaviour gap (the metrics bridge supplies nexus_outbound_requests): " +
-			"requires DescribeWorkflowExecution.PendingNexusOperations[].LastAttemptFailure rehydration, " +
-			"StartOperation retry classification (a non-retryable BAD_REQUEST must not retry), and the " +
-			"NexusOperationError chain. Nexus behaviour work, tracked; remove when it lands.",
-	},
-	{
 		nameContains: "TestNexusWorkflowTestSuite/TestNexusAsyncOperationErrorRehydration",
-		reason: "DEFERRED tokeira behaviour gap (the metrics bridge supplies nexus_outbound_requests): " +
-			"the caller workflow must rehydrate the NexusOperationError chain for async operation " +
-			"fail/cancel/terminate/timeout outcomes. Nexus error-chain fidelity work, tracked; remove " +
-			"when it lands.",
+		reason: "RAISED, two gaps (verified by running the leaf out-of-process; the metrics bridge supplies " +
+			"nexus_outbound_requests). (1) fail/terminate/timeout: the async-completion path " +
+			"(tokeira-edge nexus_callback.rs) resolves NexusResolution::Failed with the handler failure RAW, " +
+			"unlike every sibling path (wrap_handler_failure_as_resolution / external_handler_error_resolution), " +
+			"so the caller sees ApplicationError/TerminatedError/TimeoutError NOT wrapped in NexusOperationError " +
+			"— a runtime/edge NexusOperationFailureInfo-wrapping fix, no kernel. (2) wait-cancel: the handler's " +
+			"WorkflowRunOperation token must round-trip on cancel, but tokeira substitutes its own operation_id " +
+			"(publisher.rs:916-920) so the handler rejects it (BAD_REQUEST: invalid operation token); faithful " +
+			"fix needs operation_token persisted on the kernel PendingNexusOperation (state.rs:590-619 has no " +
+			"such field) — a kernel addition. All-or-nothing leaf: blocked on (2). Specced in " +
+			".kiro/specs/nexus-async-completion. Remove when both land.",
 	},
 	{
 		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletion",

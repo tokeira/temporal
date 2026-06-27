@@ -70,7 +70,7 @@ type scrapedCounter struct {
 //     one recording per genuine counter increment in the window.
 //
 // The final scrape is taken exactly once, at whichever of StopCapture/Snapshot fires first.
-func newTokeiraMetricsScrapeSource(metricsURL string) func() (func(), func() metricstest.CaptureSnapshot) {
+func newTokeiraMetricsScrapeSource(metricsURL string, namespaces *conformanceNamespaceSet) func() (func(), func() metricstest.CaptureSnapshot) {
 	client := &http.Client{Timeout: scrapeTimeout}
 	return func() (func(), func() metricstest.CaptureSnapshot) {
 		baseline := scrapeRenamedCounters(client, metricsURL)
@@ -83,7 +83,7 @@ func newTokeiraMetricsScrapeSource(metricsURL string) func() (func(), func() met
 		onStop := func() { freeze() }
 		onSnapshot := func() metricstest.CaptureSnapshot {
 			freeze()
-			return synthesizeDelta(baseline, frozen)
+			return synthesizeDelta(baseline, frozen, namespaces)
 		}
 		return onStop, onSnapshot
 	}
@@ -235,9 +235,17 @@ func seriesKey(name string, labels map[string]string) string {
 // Temporal metric name. Records for each metric are ordered so StartOperation precedes
 // CancelOperation — mirroring in-process emission chronology, so a test reading index [0]
 // (e.g. the pending StartOperation in TestNexusAsyncOperationErrorRehydration) sees it.
-func synthesizeDelta(baseline, final map[string]scrapedCounter) metricstest.CaptureSnapshot {
+// Series whose `namespace` label was not registered through this cluster are skipped: under
+// Shape-2 every dedicated cluster shares one tokeirad /metrics, so without this scope a
+// capture window would over-count by picking up concurrently-running sibling sub-tests'
+// series (the in-process server isolates this via a separate metric registry per cluster).
+// Series with no `namespace` label pass through unfiltered.
+func synthesizeDelta(baseline, final map[string]scrapedCounter, namespaces *conformanceNamespaceSet) metricstest.CaptureSnapshot {
 	snap := metricstest.CaptureSnapshot{}
 	for key, fin := range final {
+		if ns, ok := fin.labels["namespace"]; ok && namespaces != nil && !namespaces.contains(ns) {
+			continue
+		}
 		prev := 0.0
 		if b, ok := baseline[key]; ok {
 			prev = b.value

@@ -34,6 +34,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"go.temporal.io/api/operatorservice/v1"
@@ -145,8 +146,12 @@ func newConformanceCluster(
 	// Minimal TestBase: only MetadataManager + ClusterMetadata are set, which is exactly
 	// what FunctionalTestBase.RegisterNamespace reads. Every other field stays nil; a test
 	// touching them is out-of-public-scope and is skipped (see tokeira_conformance_skip.go).
+	// Shared between the metadata manager (records each registered namespace) and the
+	// metrics bridge (scopes its scrape to them), so a capture only sees this cluster's
+	// own namespace series on the shared tokeirad /metrics.
+	namespaces := newConformanceNamespaceSet()
 	testBase := &persistencetests.TestBase{
-		MetadataManager: &conformanceMetadataManager{frontend: frontendClient},
+		MetadataManager: &conformanceMetadataManager{frontend: frontendClient, namespaces: namespaces},
 		ClusterMetadata: clusterMetadata,
 	}
 
@@ -182,7 +187,7 @@ func newConformanceCluster(
 	// frontend without one), captureMetricsHandler stays nil exactly as before.
 	if metricsAddr := os.Getenv(tokeiraMetricsAddrEnv); metricsAddr != "" {
 		host.captureMetricsHandler = metricstest.NewCaptureHandlerWithSource(
-			newTokeiraMetricsScrapeSource("http://" + metricsAddr + "/metrics"),
+			newTokeiraMetricsScrapeSource("http://"+metricsAddr+"/metrics", namespaces),
 		)
 	}
 
@@ -194,6 +199,47 @@ func newConformanceCluster(
 // is implemented; the rest of the MetadataManager surface returns errConformanceUnsupported.
 type conformanceMetadataManager struct {
 	frontend workflowservice.WorkflowServiceClient
+	// namespaces records every namespace registered through THIS cluster, so the
+	// metrics bridge can scope its scrape to them. Under Shape-2 all dedicated
+	// clusters share one out-of-process tokeirad and one /metrics, so without this
+	// scope a capture window would pick up concurrently-running sibling sub-tests'
+	// namespace-labelled series (the per-cluster metric isolation the in-process
+	// server gets from a separate registry per cluster). May be nil when no metrics
+	// bridge is installed.
+	namespaces *conformanceNamespaceSet
+}
+
+// conformanceNamespaceSet is a thread-safe set of namespace names registered through a
+// single conformance cluster, shared between its metadata manager (writer) and its metrics
+// bridge source (reader).
+type conformanceNamespaceSet struct {
+	mu    sync.Mutex
+	names map[string]struct{}
+}
+
+func newConformanceNamespaceSet() *conformanceNamespaceSet {
+	return &conformanceNamespaceSet{names: map[string]struct{}{}}
+}
+
+func (s *conformanceNamespaceSet) add(name string) {
+	if name == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.names[name] = struct{}{}
+}
+
+// contains reports whether name was registered. It also reports true when the set is empty
+// (fail open): a bridge with no registered namespaces yet must not silently drop everything.
+func (s *conformanceNamespaceSet) contains(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.names) == 0 {
+		return true
+	}
+	_, ok := s.names[name]
+	return ok
 }
 
 func (m *conformanceMetadataManager) GetName() string { return "tokeira-conformance" }
@@ -210,6 +256,11 @@ func (m *conformanceMetadataManager) CreateNamespace(
 ) (*persistence.CreateNamespaceResponse, error) {
 	info := request.Namespace.GetInfo()
 	cfg := request.Namespace.GetConfig()
+
+	// Record the namespace so the metrics bridge scopes its scrape to this cluster.
+	if m.namespaces != nil {
+		m.namespaces.add(info.GetName())
+	}
 
 	req := &workflowservice.RegisterNamespaceRequest{
 		Namespace:   info.GetName(),
