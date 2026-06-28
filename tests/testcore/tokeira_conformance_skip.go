@@ -90,29 +90,14 @@ var conformanceSkips = []conformanceSkip{
 	// Temporal's metric names, so these leaves no longer panic on a nil handler. They remain
 	// skipped for reasons the bridge does NOT address:
 	//
-	//   - OUTBOUND-metric leaf (AsyncOperationErrorRehydration): the bridge supplies
-	//     nexus_outbound_requests (emission verified tag-for-tag, scoped per namespace), but
-	//     the test ALSO asserts async-completion BEHAVIOUR the engine does not yet satisfy.
-	//     DEFERRED behaviour gap, tracked on the entry. (SyncNexusFailure and
-	//     SyncOperationErrorRehydration have landed — the latter via the kernel Nexus-op
-	//     invocation-retry state machine, .kiro/specs/nexus-retry-policy.)
+	//   - OUTBOUND-metric leaves have all landed: SyncNexusFailure, SyncOperationErrorRehydration
+	//     (via the kernel Nexus-op invocation-retry state machine, .kiro/specs/nexus-retry-policy),
+	//     and AsyncOperationErrorRehydration (via the async error-rehydration + cancel-resolution
+	//     decoupling, .kiro/specs/nexus-async-completion). The bridge supplies
+	//     nexus_outbound_requests, scoped per namespace so parallel sub-cases don't cross-count.
 	//   - COMPLETION-HANDLER metric leaves: a DELIBERATE DEVIATION (Temporal's internal
 	//     callback-token wire format + StateMachineRef staleness; see each reason).
 	//   - AUTH leaves: need the in-process Host().SetOnAuthorize hook, absent out-of-process.
-	{
-		nameContains: "TestNexusWorkflowTestSuite/TestNexusAsyncOperationErrorRehydration",
-		reason: "RAISED, two gaps (verified by running the leaf out-of-process; the metrics bridge supplies " +
-			"nexus_outbound_requests). (1) fail/terminate/timeout: the async-completion path " +
-			"(tokeira-edge nexus_callback.rs) resolves NexusResolution::Failed with the handler failure RAW, " +
-			"unlike every sibling path (wrap_handler_failure_as_resolution / external_handler_error_resolution), " +
-			"so the caller sees ApplicationError/TerminatedError/TimeoutError NOT wrapped in NexusOperationError " +
-			"— a runtime/edge NexusOperationFailureInfo-wrapping fix, no kernel. (2) wait-cancel: the handler's " +
-			"WorkflowRunOperation token must round-trip on cancel, but tokeira substitutes its own operation_id " +
-			"(publisher.rs:916-920) so the handler rejects it (BAD_REQUEST: invalid operation token); faithful " +
-			"fix needs operation_token persisted on the kernel PendingNexusOperation (state.rs:590-619 has no " +
-			"such field) — a kernel addition. All-or-nothing leaf: blocked on (2). Specced in " +
-			".kiro/specs/nexus-async-completion. Remove when both land.",
-	},
 	{
 		nameContains: "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletion",
 		reason: "Asserts Temporal's internal callback-token wire format (CallbackTokenGenerator / " +
