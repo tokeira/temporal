@@ -195,6 +195,24 @@ var conformanceSkips = []conformanceSkip{
 			"Nexus client covers External HTTP endpoints only; the internal system-endpoint surface " +
 			"is deferred and tracked separately — not a public-HTTP-Nexus conformance claim",
 	},
+	{
+		nameContains: "TestWorkflowTestSuite/TestStartWorkflowExecution_InternalTaskQueue/multiOp",
+		reason: "DEFERRED GAP: requires ExecuteMultiOperation (Update-with-Start) to return a typed " +
+			"serviceerror.MultiOperationExecution wrapping per-operation validation errors. tokeira " +
+			"does not implement the MultiOperation feature yet (ExecuteMultiOperation returns " +
+			"Unimplemented); tracked under the api-conformance-multi-operation spec. The sibling " +
+			"per-NS-task-queue validation itself PASSES via StartWorkflowExecution/" +
+			"SignalWithStartWorkflowExecution in this same test.",
+	},
+	{
+		nameContains: "TestWorkflowTestSuite/TestStartWorkflowExecution_UseExisting_OnConflictOptions/" +
+			"OnConflictOptions_failed_max_callbacks_per_workflow",
+		reason: "requires OverrideDynamicConfig(MaxCallbacksPerWorkflow=1); tokeira does not support " +
+			"dynamic-config injection over the wire (MaxCallbacksPerWorkflow is a pinned constant), " +
+			"so the leaf's premise — lowering the limit to 1 mid-test — cannot reach an " +
+			"out-of-process tokeirad. Same class as the other OverrideDynamicConfig skips in this " +
+			"registry.",
+	},
 }
 
 // conformanceSkipReason returns the skip reason for a test name when one is
