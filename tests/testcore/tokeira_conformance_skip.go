@@ -205,25 +205,6 @@ var conformanceSkips = []conformanceSkip{
 			"SignalWithStartWorkflowExecution in this same test.",
 	},
 	{
-		nameContains: "TestWorkflowTestSuite/TestWorkflowRetry",
-		reason: "DEFERRED GAP (raised): requires the workflow retry chain — a run failing with a " +
-			"RetryPolicy must close as Failed carrying new_execution_run_id and start an attempt-N+1 " +
-			"successor run (workflow_task_completed_handler.go:788 + workflow/retry.go @ v1.31.0). " +
-			"tokeira has no retry continuation yet (kernel WorkflowExecutionFailed lacks " +
-			"new_execution_run_id; no successor start), raised in " +
-			"docs/HANDOVER-workflow-retry-chain.md under api-conformance-wft-completion. Cannot stay " +
-			"a live FAIL: the corpus helper polls indefinitely for the successor run's history, " +
-			"hanging until the go-test timeout and ABORTING the parallel suite (0 outcomes recorded).",
-	},
-	{
-		nameContains: "TestWorkflowTestSuite/TestWorkflowRetryFailures",
-		reason: "DEFERRED GAP (raised): same unimplemented workflow retry chain (and same " +
-			"suite-aborting hang) as TestWorkflowRetry — see docs/HANDOVER-workflow-retry-chain.md; " +
-			"additionally asserts the retry stop conditions (MaximumAttemptsReached / " +
-			"NonRetryableFailure retry_state), which need the same kernel RetryContinuation. " +
-			"Separate entry because nameContains matches on path-segment boundaries.",
-	},
-	{
 		nameContains: "TestWorkflowTestSuite/TestStartWorkflowExecution_UseExisting_OnConflictOptions/" +
 			"OnConflictOptions_failed_max_callbacks_per_workflow",
 		reason: "requires OverrideDynamicConfig(MaxCallbacksPerWorkflow=1); tokeira does not support " +
