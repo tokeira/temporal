@@ -205,6 +205,17 @@ var conformanceSkips = []conformanceSkip{
 			"SignalWithStartWorkflowExecution in this same test.",
 	},
 	{
+		nameContains: "TestWorkflowTaskTestSuite/TestWorkflowTaskHeartbeatingWithEmptyResult",
+		reason: "OUT OF SCOPE (owner decision 2026-07-03): depends on " +
+			"OverrideDynamicConfig(WorkflowTaskHeartbeatTimeout=5s) vs the 30m default " +
+			"(respondworkflowtaskcompleted/api.go:298, constants.go:2427). Per the conformance " +
+			"config-as-constant convention the 30m default is not operationally wrong for tokeira, so the " +
+			"heartbeat timeout does not earn a deployment knob merely to pass a test — same class as the " +
+			"MaxCallbacksPerWorkflow OverrideDynamicConfig skip. Permanent skip, not implemented (no " +
+			"config knob, no PendingWorkflowTask.original_scheduled_at). Spec .kiro/specs/transient-wft/ " +
+			"Item C; raised in docs/HANDOVER-transient-wft.md (C).",
+	},
+	{
 		nameContains: "TestWorkflowTestSuite/TestStartWorkflowExecution_UseExisting_OnConflictOptions/" +
 			"OnConflictOptions_failed_max_callbacks_per_workflow",
 		reason: "requires OverrideDynamicConfig(MaxCallbacksPerWorkflow=1); tokeira does not support " +
