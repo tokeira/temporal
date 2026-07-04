@@ -38,6 +38,14 @@ var conformanceSkips = []conformanceSkip{
 			"dynamic-config injection over the wire (established OverrideDynamicConfig-class skip)",
 	},
 	{
+		nameContains: "TestRawHistorySuite/TestGetWorkflowExecutionHistory_GetRawHistoryData",
+		reason: "requires suite-level dynamic config SendRawWorkflowHistory=true (default false); " +
+			"the raw path REPLACES parsed History with RawHistory blobs " +
+			"(getworkflowexecutionhistory/api.go:101 @ v1.31.0), so honoring it unconditionally " +
+			"would break every parsed-history consumer, and tokeira does not support " +
+			"dynamic-config injection over the wire (established OverrideDynamicConfig-class skip)",
+	},
+	{
 		nameContains: "TestWorkerDeploymentSuite/TestDeploymentVersionLimits",
 		reason: "requires OverrideDynamicConfig(MatchingMaxVersionsInDeployment=1); " +
 			"tokeira does not support dynamic-config injection over the wire and its " +
