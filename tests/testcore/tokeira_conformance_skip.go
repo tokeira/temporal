@@ -32,6 +32,12 @@ type conformanceSkip struct {
 
 var conformanceSkips = []conformanceSkip{
 	{
+		nameContains: "TestTransientTaskSuite/TestTransientWorkflowTaskHistorySize",
+		reason: "requires OverrideDynamicConfig(HistorySizeSuggestContinueAsNew=20KB) to drive " +
+			"SuggestContinueAsNew at a test-sized threshold; tokeira does not support " +
+			"dynamic-config injection over the wire (established OverrideDynamicConfig-class skip)",
+	},
+	{
 		nameContains: "TestWorkerDeploymentSuite/TestDeploymentVersionLimits",
 		reason: "requires OverrideDynamicConfig(MatchingMaxVersionsInDeployment=1); " +
 			"tokeira does not support dynamic-config injection over the wire and its " +
