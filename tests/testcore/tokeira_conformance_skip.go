@@ -38,6 +38,13 @@ var conformanceSkips = []conformanceSkip{
 			"dynamic-config injection over the wire (established OverrideDynamicConfig-class skip)",
 	},
 	{
+		nameContains: "TestQueryWorkflowSuite/TestQueryWorkflow_NonStickyMultiPageHistory",
+		reason: "requires OverrideDynamicConfig(MatchingHistoryMaxPageSize=2) to force a multi-page " +
+			"query-task history (the leaf asserts a non-empty NextPageToken, unreachable at any " +
+			"realistic default page size); tokeira does not support dynamic-config injection over " +
+			"the wire (established OverrideDynamicConfig-class skip)",
+	},
+	{
 		nameContains: "TestRawHistorySuite/TestGetWorkflowExecutionHistory_GetRawHistoryData",
 		reason: "requires suite-level dynamic config SendRawWorkflowHistory=true (default false); " +
 			"the raw path REPLACES parsed History with RawHistory blobs " +
