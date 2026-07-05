@@ -32,6 +32,87 @@ type conformanceSkip struct {
 
 var conformanceSkips = []conformanceSkip{
 	{
+		nameContains: "TestWorkflowUpdateSuite/TestFirstNormalWorkflowTask_UpdateResurrectedAfterRegistryCleared",
+		reason: "calls clearUpdateRegistryAndAbortPendingUpdates -> FunctionalTestBase.CloseShard, an " +
+			"in-process history-service admin poke that simulates volatile update-registry loss; " +
+			"tokeira runs out-of-process with no shard-close surface (the nil in-process host " +
+			"SIGSEGVs the harness). CloseShard-class skip.",
+	},
+	{
+		nameContains: "TestWorkflowUpdateSuite/TestCompletedSpeculativeWorkflowTask_DeduplicateID",
+		reason: "calls closeShard to evict mutable state between update completions, exercising " +
+			"registry-rebuild dedupe; requires in-process CloseShard, impossible against the " +
+			"out-of-process engine (CloseShard-class skip).",
+	},
+	{
+		nameContains: "TestWorkflowUpdateSuite/TestStaleSpeculativeWorkflowTask_Fail_BecauseOfDifferentStartedId",
+		reason: "calls clearUpdateRegistryAndAbortPendingUpdates (CloseShard) to force a stale " +
+			"speculative WFT with a divergent started id; requires in-process CloseShard, " +
+			"impossible against the out-of-process engine (CloseShard-class skip).",
+	},
+	{
+		nameContains: "TestWorkflowUpdateSuite/TestStaleSpeculativeWorkflowTask_Fail_BecauseOfDifferentStartTime",
+		reason: "calls clearUpdateRegistryAndAbortPendingUpdates (CloseShard) to force a stale " +
+			"speculative WFT with a divergent start time; requires in-process CloseShard, " +
+			"impossible against the out-of-process engine (CloseShard-class skip).",
+	},
+	{
+		nameContains: "TestWorkflowUpdateSuite/TestStaleSpeculativeWorkflowTask_Fail_NewWorkflowTaskWith2Updates",
+		reason: "calls clearUpdateRegistryAndAbortPendingUpdates (CloseShard) to strand a stale " +
+			"speculative WFT before delivering two fresh updates; requires in-process CloseShard, " +
+			"impossible against the out-of-process engine (CloseShard-class skip).",
+	},
+	{
+		nameContains: "TestWorkflowUpdateSuite/TestScheduledSpeculativeWorkflowTask_LostUpdate",
+		reason: "calls loseUpdateRegistryAndAbandonPendingUpdates -> CloseShard to drop a scheduled " +
+			"speculative WFT's update from the volatile registry; requires in-process CloseShard, " +
+			"impossible against the out-of-process engine (CloseShard-class skip).",
+	},
+	{
+		nameContains: "TestWorkflowUpdateSuite/TestStartedSpeculativeWorkflowTask_LostUpdate",
+		reason: "calls loseUpdateRegistryAndAbandonPendingUpdates -> CloseShard to drop a started " +
+			"speculative WFT's update from the volatile registry; requires in-process CloseShard, " +
+			"impossible against the out-of-process engine (CloseShard-class skip).",
+	},
+	{
+		nameContains: "TestWorkflowUpdateSuite/TestStartedSpeculativeWorkflowTask_TerminateWorkflow",
+		reason: "ends with env.AdminClient().DescribeMutableState asserting CompletionEventBatchId; " +
+			"the conformance shim has no admin client (nil-interface panic aborts the parallel " +
+			"suite). The public abort-on-terminate surface stays covered by " +
+			"TestUpdateWorkflowSdkSuite/TestTerminateWorkflowAfterUpdateAccepted. " +
+			"AdminService/DescribeMutableState-class skip.",
+	},
+	{
+		nameContains: "TestWorkflowUpdateSuite/TestScheduledSpeculativeWorkflowTask_TerminateWorkflow",
+		reason: "ends with env.AdminClient().DescribeMutableState asserting CompletionEventBatchId; " +
+			"the conformance shim has no admin client (nil-interface panic aborts the parallel " +
+			"suite). The public abort-on-terminate surface stays covered by " +
+			"TestUpdateWorkflowSdkSuite/TestTerminateWorkflowAfterUpdateAdmitted. " +
+			"AdminService/DescribeMutableState-class skip.",
+	},
+	{
+		nameContains: "TestWorkflowUpdateSuite/TestContinueAsNew_Suggestion",
+		reason: "requires OverrideDynamicConfig(WorkflowExecutionMaxTotalUpdates=3, " +
+			"SuggestContinueAsNewThreshold=0.5) vs v1.31.0 defaults 2000/0.9 — the asserted " +
+			"SuggestContinueAsNew flip on the second update is unreachable at defaults (needs " +
+			"1800 updates); tokeira does not support dynamic-config injection over the wire " +
+			"(established OverrideDynamicConfig-class skip)",
+	},
+	{
+		nameContains: "TestUpdateWithStartSuite/TestReturnUpdateRateLimitError",
+		reason: "requires OverrideDynamicConfig(WorkflowExecutionMaxTotalUpdates=1) vs the v1.31.0 " +
+			"default 2000 to trip the total-updates FailedPrecondition on the second update; " +
+			"unreachable at the default; tokeira does not support dynamic-config injection over " +
+			"the wire (established OverrideDynamicConfig-class skip)",
+	},
+	{
+		nameContains: "TestUpdateWithStartSuite/TestReturnUpdateInFlightLimitError",
+		reason: "requires OverrideDynamicConfig(WorkflowExecutionMaxInFlightUpdates=1) vs the " +
+			"v1.31.0 default 10 to trip the in-flight ResourceExhausted on the second concurrent " +
+			"update; unreachable at the default; tokeira does not support dynamic-config " +
+			"injection over the wire (established OverrideDynamicConfig-class skip)",
+	},
+	{
 		nameContains: "TestTransientTaskSuite/TestTransientWorkflowTaskHistorySize",
 		reason: "requires OverrideDynamicConfig(HistorySizeSuggestContinueAsNew=20KB) to drive " +
 			"SuggestContinueAsNew at a test-sized threshold; tokeira does not support " +
