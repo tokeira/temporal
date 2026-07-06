@@ -99,6 +99,15 @@ var conformanceSkips = []conformanceSkip{
 			"(established OverrideDynamicConfig-class skip)",
 	},
 	{
+		nameContains: "TestUpdateWithStartSuite/TestUpdateIsAbortedByClosingWorkflow",
+		reason: "closing-workflow retry-once + NotFound->Aborted conversion is a deliberate spec " +
+			"deferral (api-conformance-multi-operation task 6.1: primary UWS paths land first, " +
+			"retry in the wave-8 follow-up task 6.2); the return_retryable_error_after_retry " +
+			"sub-case additionally requires the in-process testhook " +
+			"UpdateWithStartOnClosingWorkflowRetry to force a second abort, which never fires " +
+			"against the out-of-process engine.",
+	},
+	{
 		nameContains: "TestUpdateWithStartSuite/TestReturnUpdateRateLimitError",
 		reason: "requires OverrideDynamicConfig(WorkflowExecutionMaxTotalUpdates=1) vs the v1.31.0 " +
 			"default 2000 to trip the total-updates FailedPrecondition on the second update; " +
