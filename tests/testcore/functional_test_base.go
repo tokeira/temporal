@@ -502,10 +502,18 @@ func (s *FunctionalTestBase) RegisterNamespace(
 		},
 		IsGlobalNamespace: false,
 	}
-	_, err := s.testCluster.testBase.MetadataManager.CreateNamespace(context.Background(), namespaceRequest)
+	createResp, err := s.testCluster.testBase.MetadataManager.CreateNamespace(context.Background(), namespaceRequest)
 
 	if err != nil {
 		return namespace.EmptyID, err
+	}
+
+	// Adopt the id the store actually assigned. On a real cluster this equals
+	// nsID; under the tokeira conformance adapter tokeirad derives its own id
+	// (a hash of the name) and returns it here, so downstream comparisons of a
+	// history event's NamespaceId against s.NamespaceID() line up.
+	if createResp != nil && createResp.ID != "" {
+		nsID = namespace.ID(createResp.ID)
 	}
 
 	namespaceCacheDeadline := time.Now().Add(5 * NamespaceCacheRefreshInterval)

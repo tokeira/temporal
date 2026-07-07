@@ -279,7 +279,19 @@ func (m *conformanceMetadataManager) CreateNamespace(
 			return nil, fmt.Errorf("tokeira conformance: RegisterNamespace %q: %w", info.GetName(), err)
 		}
 	}
-	return &persistence.CreateNamespaceResponse{ID: info.GetId()}, nil
+
+	// tokeirad assigns its own namespace id (a hash of the name), which is what
+	// every history event carries. The harness picked an arbitrary id in the
+	// CreateNamespaceRequest, but suites compare event `NamespaceId` against
+	// s.NamespaceID(), so return tokeirad's real id — read back via
+	// DescribeNamespace — rather than the harness's throwaway one.
+	id := info.GetId()
+	if desc, descErr := m.frontend.DescribeNamespace(ctx, &workflowservice.DescribeNamespaceRequest{
+		Namespace: info.GetName(),
+	}); descErr == nil && desc.GetNamespaceInfo().GetId() != "" {
+		id = desc.GetNamespaceInfo().GetId()
+	}
+	return &persistence.CreateNamespaceResponse{ID: id}, nil
 }
 
 func (m *conformanceMetadataManager) GetNamespace(context.Context, *persistence.GetNamespaceRequest) (*persistence.GetNamespaceResponse, error) {
