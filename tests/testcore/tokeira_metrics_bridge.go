@@ -43,6 +43,14 @@ var tokeiraMetricRename = map[string]string{
 	"tokeira_edge_nexus_completion_requests_total":                  "nexus_completion_requests",
 	"tokeira_edge_nexus_completion_request_preprocess_errors_total": "nexus_completion_request_preprocess_errors",
 	"tokeira_edge_nexus_task_requests_total":                        "nexus_task_requests",
+	// Speculative workflow task outcome counters (spec speculative-wft M.1/M.2).
+	// commits/rollbacks are read count-only; the timer-task counters carry an
+	// "operation" label = TimerActiveTaskSpeculativeWorkflowTaskTimeout that the
+	// corpus filters on, preserved verbatim through the label round-trip.
+	"tokeira_runtime_speculative_workflow_task_commits_total":   "speculative_workflow_task_commits",
+	"tokeira_runtime_speculative_workflow_task_rollbacks_total": "speculative_workflow_task_rollbacks",
+	"tokeira_runtime_speculative_timer_task_requests_total":     "task_requests",
+	"tokeira_runtime_speculative_start_to_close_timeout_total":  "start_to_close_timeout",
 }
 
 // scrapeTimeout bounds a single /metrics fetch; a slow or dead endpoint yields an empty
