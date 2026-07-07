@@ -128,6 +128,15 @@ var conformanceSkips = []conformanceSkip{
 			"dynamic-config injection over the wire (established OverrideDynamicConfig-class skip)",
 	},
 	{
+		nameContains: "TestMaxBufferedEventSuite/TestBufferedEventsMutableStateSizeLimit",
+		reason: "requires OverrideDynamicConfig(MutableStateSizeLimitError=410KB) so 100KB signals " +
+			"exhaust the mutable-state size at a test-sized threshold; unreachable at the v1.31.0 " +
+			"default 8MB, and tokeira does not support dynamic-config injection over the wire. The " +
+			"sibling TestMaxBufferedEventsLimit (count>100 force-close) passes because it relies on " +
+			"the DEFAULT MaximumBufferedEventsBatch=100, not an override (established " +
+			"OverrideDynamicConfig-class skip).",
+	},
+	{
 		nameContains: "TestQueryWorkflowSuite/TestQueryWorkflow_NonStickyMultiPageHistory",
 		reason: "requires OverrideDynamicConfig(MatchingHistoryMaxPageSize=2) to force a multi-page " +
 			"query-task history (the leaf asserts a non-empty NextPageToken, unreachable at any " +
