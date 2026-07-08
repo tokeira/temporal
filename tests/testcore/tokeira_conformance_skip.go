@@ -344,6 +344,23 @@ var conformanceSkips = []conformanceSkip{
 			"out-of-process tokeirad. Same class as the other OverrideDynamicConfig skips in this " +
 			"registry.",
 	},
+	{
+		nameContains: "TestWorkflowResetTestSuite/TestResetWorkflowWithOptionsUpdate",
+		reason: "reset-with-worker-deployment-versioning: startVersionedPollerAndValidate drives a " +
+			"VERSIONED poller and asserts task-queue version membership via the matching-service RPC " +
+			"CheckTaskQueueVersionMembership. tokeira's conformance cluster exposes no standalone " +
+			"MatchingClient (the engine is a single edge process), so GetTestCluster().MatchingClient() " +
+			"is nil and the versioned-poller goroutine SIGSEGVs, aborting the whole binary. Worker " +
+			"deployment versioning is Tier-4+ scope; the reset behaviour itself is covered by the " +
+			"non-versioned reset leaves. Matching-service/versioning-class skip.",
+	},
+	{
+		nameContains: "TestWorkflowResetTestSuite/TestBatchResetWithOptionsUpdate",
+		reason: "reset-with-worker-deployment-versioning: same startVersionedPollerAndValidate + " +
+			"CheckTaskQueueVersionMembership matching-RPC dependency as TestResetWorkflowWithOptionsUpdate " +
+			"(nil MatchingClient SIGSEGVs the versioned-poller goroutine). Worker deployment versioning " +
+			"is Tier-4+ scope. Matching-service/versioning-class skip.",
+	},
 }
 
 // conformanceSkipReason returns the skip reason for a test name when one is
