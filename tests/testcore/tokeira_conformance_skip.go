@@ -144,6 +144,15 @@ var conformanceSkips = []conformanceSkip{
 			"the wire (established OverrideDynamicConfig-class skip)",
 	},
 	{
+		nameContains: "TestEagerWorkflowTestSuite/TestEagerWorkflowStart_TerminateDuplicate",
+		reason: "requires OverrideDynamicConfig(WorkflowIdReuseMinimalInterval=0) to allow an " +
+			"immediate TerminateIfRunning restart; v1.31.0 migrates that reuse policy to " +
+			"TERMINATE_EXISTING and applies the default 1s minimal-reuse gate, while tokeira " +
+			"cannot receive dynamic-config injection over the wire (tests/eager_workflow_start_test.go, " +
+			"common/dynamicconfig/constants.go, service/history/api/workflow_id_dedup.go @ v1.31.0; " +
+			"established OverrideDynamicConfig-class skip)",
+	},
+	{
 		nameContains: "TestRawHistorySuite/TestGetWorkflowExecutionHistory_GetRawHistoryData",
 		reason: "requires suite-level dynamic config SendRawWorkflowHistory=true (default false); " +
 			"the raw path REPLACES parsed History with RawHistory blobs " +
