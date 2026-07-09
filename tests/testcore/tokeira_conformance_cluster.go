@@ -40,6 +40,7 @@ import (
 	"go.temporal.io/api/operatorservice/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/api/workflowservice/v1"
+	"go.temporal.io/server/api/adminservice/v1"
 	"go.temporal.io/server/common/cluster"
 	"go.temporal.io/server/common/dynamicconfig"
 	"go.temporal.io/server/common/log"
@@ -156,9 +157,12 @@ func newConformanceCluster(
 	}
 
 	host := &TemporalImpl{
-		logger:                logger,
-		frontendClient:        frontendClient,
-		operatorClient:        operatorservice.NewOperatorServiceClient(conn),
+		logger:         logger,
+		frontendClient: frontendClient,
+		operatorClient: operatorservice.NewOperatorServiceClient(conn),
+		// tokeirad serves a minimal AdminService (DescribeMutableState) on the same
+		// port; the reset suite reads a run's ResetRunId/status through it.
+		adminClient:           adminservice.NewAdminServiceClient(conn),
 		clusterMetadataConfig: clusterMetadataConfig,
 		dcClient:              dynamicconfig.NewMemoryClient(),
 		// SetupTest/TearDownTest call host.grpcClientInterceptor.Set(...) unconditionally to
