@@ -137,6 +137,39 @@ var conformanceSkips = []conformanceSkip{
 			"OverrideDynamicConfig-class skip).",
 	},
 	{
+		nameContains: "TestSizeLimitFunctionalSuite/TestTerminateWorkflowCausedByHistoryCountLimit",
+		reason: "requires HistoryCountLimitError=20 (and warn=10) vs the v1.31.0 default " +
+			"50*1024 events so a short activity/signal history force-terminates; the corpus " +
+			"delivers those values only through WithDynamicConfig, which cannot reach an " +
+			"out-of-process tokeirad (tests/sizelimit_test.go:43-51 and " +
+			"common/dynamicconfig/constants.go:376-384 @ v1.31.0; established " +
+			"OverrideDynamicConfig-class skip)",
+	},
+	{
+		nameContains: "TestSizeLimitFunctionalSuite/TestWorkflowFailed_PayloadSizeTooLarge",
+		reason: "requires BlobSizeLimitError=1000 vs the v1.31.0 default 2MiB so a 1001-byte " +
+			"marker fails its workflow task; the corpus delivers that value only through " +
+			"WithDynamicConfig, which cannot reach an out-of-process tokeirad " +
+			"(tests/sizelimit_test.go:229-230 and common/dynamicconfig/constants.go:316-324 " +
+			"@ v1.31.0; established OverrideDynamicConfig-class skip)",
+	},
+	{
+		nameContains: "TestSizeLimitFunctionalSuite/TestTerminateWorkflowCausedByMsSizeLimit",
+		reason: "requires MutableStateSizeLimitError=1100 bytes vs the v1.31.0 default 8MiB " +
+			"so four small pending activities force-terminate; the corpus delivers that value " +
+			"only through WithDynamicConfig, which cannot reach an out-of-process tokeirad " +
+			"(tests/sizelimit_test.go:326-327 and common/dynamicconfig/constants.go:397-405 " +
+			"@ v1.31.0; established OverrideDynamicConfig-class skip)",
+	},
+	{
+		nameContains: "TestSizeLimitFunctionalSuite/TestTerminateWorkflowCausedByHistorySizeLimit",
+		reason: "requires HistorySizeLimitError=9000 bytes vs the v1.31.0 default 50MiB so " +
+			"ten 900-byte signals force-terminate; the corpus delivers that value only through " +
+			"WithDynamicConfig, which cannot reach an out-of-process tokeirad " +
+			"(tests/sizelimit_test.go:460-461 and common/dynamicconfig/constants.go:360-368 " +
+			"@ v1.31.0; established OverrideDynamicConfig-class skip)",
+	},
+	{
 		nameContains: "TestQueryWorkflowSuite/TestQueryWorkflow_NonStickyMultiPageHistory",
 		reason: "requires OverrideDynamicConfig(MatchingHistoryMaxPageSize=2) to force a multi-page " +
 			"query-task history (the leaf asserts a non-empty NextPageToken, unreachable at any " +
