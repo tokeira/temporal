@@ -30,7 +30,101 @@ type conformanceSkip struct {
 	reason string
 }
 
+const workerVersioningEnabledPathReason = "requires the suite's non-default " +
+	"frontend.workerVersioningDataAPIs=true V1 enabled path (and, for versioning rules, " +
+	"frontend.workerVersioningRuleAPIs=true); the Tokeira v1.31.0 conformance decision " +
+	"targets the stock-default PERMISSION_DENIED behavior and excludes deprecated V1/V2 " +
+	"version sets, rules, reachability, and scavenging semantics."
+
 var conformanceSkips = []conformanceSkip{
+	{
+		nameContains: "TestAdvancedVisibilitySuite/Test_BuildIdIndexedOnCompletion_VersionedWorker",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuiteLegacy/Test_BuildIdIndexedOnCompletion_VersionedWorker",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuite/Test_BuildIdIndexedOnReset",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuiteLegacy/Test_BuildIdIndexedOnReset",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuite/Test_BuildIdIndexedOnRetry",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuiteLegacy/Test_BuildIdIndexedOnRetry",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_ByBuildId",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_ByBuildId",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_ByBuildId_NotInNamespace",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_ByBuildId_NotInNamespace",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_ByBuildId_NotInTaskQueue",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_ByBuildId_NotInTaskQueue",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_EmptyBuildIds",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_EmptyBuildIds",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_TooManyBuildIds",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_TooManyBuildIds",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_Unversioned_InNamespace",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_Unversioned_InNamespace",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_Unversioned_InTaskQueue",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_Unversioned_InTaskQueue",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuite/TestBuildIdScavenger_DeletesUnusedBuildId",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestAdvancedVisibilitySuiteLegacy/TestBuildIdScavenger_DeletesUnusedBuildId",
+		reason:       workerVersioningEnabledPathReason,
+	},
 	{
 		nameContains: "TestWorkflowUpdateSuite/TestFirstNormalWorkflowTask_UpdateResurrectedAfterRegistryCleared",
 		reason: "calls clearUpdateRegistryAndAbortPendingUpdates -> FunctionalTestBase.CloseShard, an " +

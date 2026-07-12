@@ -112,6 +112,41 @@ func TestConformanceSkipRegexp_WFTFailureReportedProblems(t *testing.T) {
 	}
 }
 
+func TestConformanceSkipRegexp_AdvancedVisibilityWorkerVersioning(t *testing.T) {
+	for _, suite := range []string{"TestAdvancedVisibilitySuite", "TestAdvancedVisibilitySuiteLegacy"} {
+		pattern := ConformanceSkipRegexp(suite)
+		if pattern == "" {
+			t.Fatalf("expected a skip regexp for %s", suite)
+		}
+
+		for _, leaf := range []string{
+			"Test_BuildIdIndexedOnCompletion_VersionedWorker",
+			"Test_BuildIdIndexedOnReset",
+			"Test_BuildIdIndexedOnRetry",
+			"TestWorkerTaskReachability_ByBuildId",
+			"TestWorkerTaskReachability_ByBuildId_NotInNamespace",
+			"TestWorkerTaskReachability_ByBuildId_NotInTaskQueue",
+			"TestWorkerTaskReachability_EmptyBuildIds",
+			"TestWorkerTaskReachability_TooManyBuildIds",
+			"TestWorkerTaskReachability_Unversioned_InNamespace",
+			"TestWorkerTaskReachability_Unversioned_InTaskQueue",
+			"TestBuildIdScavenger_DeletesUnusedBuildId",
+		} {
+			name := suite + "/" + leaf
+			if !matchesSkip(t, pattern, name) {
+				t.Errorf("expected %q to be skipped by %q", name, pattern)
+			}
+		}
+
+		// WorkerVersionStamp and BuildIds field fidelity remain in-surface even
+		// though the deprecated V1/V2 enabled paths are excluded.
+		name := suite + "/Test_BuildIdIndexedOnCompletion_UnversionedWorker"
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
 func TestConformanceSkipRegexp_SizeLimit(t *testing.T) {
 	const suite = "TestSizeLimitFunctionalSuite"
 	pattern := ConformanceSkipRegexp(suite)
