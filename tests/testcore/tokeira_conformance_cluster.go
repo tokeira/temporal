@@ -37,10 +37,12 @@ import (
 	"sync"
 	"testing"
 
+	deploymentpb "go.temporal.io/api/deployment/v1"
 	"go.temporal.io/api/operatorservice/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/server/api/adminservice/v1"
+	"go.temporal.io/server/api/matchingservice/v1"
 	"go.temporal.io/server/common/cluster"
 	"go.temporal.io/server/common/dynamicconfig"
 	"go.temporal.io/server/common/log"
@@ -160,6 +162,10 @@ func newConformanceCluster(
 		logger:         logger,
 		frontendClient: frontendClient,
 		operatorClient: operatorservice.NewOperatorServiceClient(conn),
+		matchingClient: &conformanceMatchingClient{
+			frontend:   frontendClient,
+			namespaces: namespaces,
+		},
 		// tokeirad serves a minimal AdminService (DescribeMutableState) on the same
 		// port; the reset suite reads a run's ResetRunId/status through it.
 		adminClient:           adminservice.NewAdminServiceClient(conn),
@@ -219,10 +225,14 @@ type conformanceMetadataManager struct {
 type conformanceNamespaceSet struct {
 	mu    sync.Mutex
 	names map[string]struct{}
+	ids   map[string]string
 }
 
 func newConformanceNamespaceSet() *conformanceNamespaceSet {
-	return &conformanceNamespaceSet{names: map[string]struct{}{}}
+	return &conformanceNamespaceSet{
+		names: map[string]struct{}{},
+		ids:   map[string]string{},
+	}
 }
 
 func (s *conformanceNamespaceSet) add(name string) {
@@ -232,6 +242,22 @@ func (s *conformanceNamespaceSet) add(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.names[name] = struct{}{}
+}
+
+func (s *conformanceNamespaceSet) addID(id, name string) {
+	if id == "" || name == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ids[id] = name
+}
+
+func (s *conformanceNamespaceSet) nameForID(id string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	name, ok := s.ids[id]
+	return name, ok
 }
 
 // contains reports whether name was registered. It also reports true when the set is empty
@@ -295,7 +321,62 @@ func (m *conformanceMetadataManager) CreateNamespace(
 	}); descErr == nil && desc.GetNamespaceInfo().GetId() != "" {
 		id = desc.GetNamespaceInfo().GetId()
 	}
+	if m.namespaces != nil {
+		m.namespaces.addID(id, info.GetName())
+	}
 	return &persistence.CreateNamespaceResponse{ID: id}, nil
+}
+
+// conformanceMatchingClient adapts the sole matching-service read used by GA Worker Deployment
+// corpus tests to the equivalent public WorkflowService projection. Embedding the generated client
+// keeps unsupported matching methods unavailable while allowing this one read to remain honest:
+// DescribeWorkerDeploymentVersion reports every task queue observed for the version.
+type conformanceMatchingClient struct {
+	matchingservice.MatchingServiceClient
+	frontend   workflowservice.WorkflowServiceClient
+	namespaces *conformanceNamespaceSet
+}
+
+func (c *conformanceMatchingClient) CheckTaskQueueVersionMembership(
+	ctx context.Context,
+	request *matchingservice.CheckTaskQueueVersionMembershipRequest,
+	_ ...grpc.CallOption,
+) (*matchingservice.CheckTaskQueueVersionMembershipResponse, error) {
+	namespace, ok := c.namespaces.nameForID(request.GetNamespaceId())
+	if !ok {
+		return nil, fmt.Errorf(
+			"tokeira conformance: namespace id %q is not registered in this cluster",
+			request.GetNamespaceId(),
+		)
+	}
+	version := request.GetVersion()
+	if version == nil {
+		return &matchingservice.CheckTaskQueueVersionMembershipResponse{}, nil
+	}
+
+	response, err := c.frontend.DescribeWorkerDeploymentVersion(
+		ctx,
+		&workflowservice.DescribeWorkerDeploymentVersionRequest{
+			Namespace: namespace,
+			DeploymentVersion: &deploymentpb.WorkerDeploymentVersion{
+				DeploymentName: version.GetDeploymentName(),
+				BuildId:        version.GetBuildId(),
+			},
+		},
+	)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return &matchingservice.CheckTaskQueueVersionMembershipResponse{}, nil
+		}
+		return nil, err
+	}
+
+	for _, taskQueue := range response.GetVersionTaskQueues() {
+		if taskQueue.GetName() == request.GetTaskQueue() && taskQueue.GetType() == request.GetTaskQueueType() {
+			return &matchingservice.CheckTaskQueueVersionMembershipResponse{IsMember: true}, nil
+		}
+	}
+	return &matchingservice.CheckTaskQueueVersionMembershipResponse{}, nil
 }
 
 func (m *conformanceMetadataManager) GetNamespace(context.Context, *persistence.GetNamespaceRequest) (*persistence.GetNamespaceResponse, error) {
