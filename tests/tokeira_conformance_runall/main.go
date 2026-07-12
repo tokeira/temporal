@@ -38,6 +38,9 @@
 // against that address as-is. Otherwise it boots a `tokeirad` from TOKEIRA_BIN on
 // a free loopback port with a minimal in-memory TOML, waits until the frontend
 // genuinely serves WorkflowService, runs the corpus, and tears the process down.
+// That boot-or-reuse lifecycle is shared with the single-suite runner via the
+// tests/tokeira_conformance_runner package, so both agree on how tokeirad is
+// stood up and how the bridges and Go toolchain are wired.
 //
 // This is a standalone `main` in its own package directory, so `go test ./tests/`
 // (non-recursive, the corpus) never builds or runs it; it is explicitly invoked
@@ -45,50 +48,21 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
-	"os/signal"
-	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
-	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/server/tests/testcore"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	runner "go.temporal.io/server/tests/tokeira_conformance_runner"
 )
 
 const (
-	// tokeiradBinEnv names the path to a prebuilt `tokeirad` binary. Required
-	// only when the runner must boot its own frontend (i.e. when the seam
-	// address env is not already set).
-	tokeiradBinEnv = "TOKEIRA_BIN"
-	// seamAddrEnv mirrors the onebox seam env read by onebox.go and the harness.
-	// When already set, the runner reuses that frontend; otherwise it exports
-	// the address of the frontend it boots so the corpus resolves to it.
-	seamAddrEnv = "TOKEIRA_CONFORMANCE_FRONTEND_ADDR"
-	// metricsAddrEnv carries the tokeirad Prometheus /metrics host:port to the corpus
-	// (read by the conformance cluster's metrics bridge). The runner exports it for a
-	// frontend it boots; in reuse mode it passes through whatever the operator set, so a
-	// long-lived operator-managed tokeirad can opt into the metrics bridge by exporting it.
-	// Mirrors tokeira_metrics_bridge.go's tokeiraMetricsAddrEnv (duplicated like seamAddrEnv
-	// rather than imported — this standalone command does not depend on the test package).
-	metricsAddrEnv = "TOKEIRA_CONFORMANCE_METRICS_ADDR"
-	// controlAddrEnv carries tokeirad's conformance dynamic-config control-service host:port to
-	// the corpus (read by the dynamic-config bridge in tokeira_dynamic_config_bridge.go). The
-	// runner exports it for a frontend it boots; in reuse mode it passes through whatever the
-	// operator set. A listener answers there only when tokeirad was built with the `conformance`
-	// feature; absent it, the bridge no-ops. Duplicated like seamAddrEnv — this standalone command
-	// does not depend on the test package.
-	controlAddrEnv = "TOKEIRA_CONFORMANCE_CONTROL_ADDR"
 	// resultsPathEnv optionally overrides where the machine-readable `go test
-	// -json` event stream is written. Task 8.2 consumes this stream to build the
-	// per-test ledger; 8.1 only needs to produce it faithfully.
+	// -json` event stream is written. The report consumes this stream to build
+	// the per-test ledger.
 	resultsPathEnv = "TOKEIRA_CONFORMANCE_RESULTS"
 
 	// defaultResultsPath is the default destination for the -json event stream.
@@ -98,21 +72,11 @@ const (
 	// of functional test files, with no `...` that would pull in this runner or
 	// testcore helpers as test targets.
 	corpusPattern = "./tests/"
-	// readyTimeout bounds how long the runner waits for a freshly-booted
-	// `tokeirad` frontend to begin serving before giving up.
-	readyTimeout = 60 * time.Second
 	// perTestTimeout is the `go test -timeout` applied to each isolated
 	// entrypoint process. It bounds a single hung entrypoint without capping the
 	// whole corpus; an entrypoint that exceeds it is killed by `go test` and
 	// recorded as a failure (data), and the runner moves on to the next.
 	perTestTimeout = 5 * time.Minute
-
-	// conformanceGoToolchain pins the Go toolchain for every `go test` the runner
-	// spawns, so the corpus is exercised on the version its go.mod requires
-	// (matching TEMPORAL_SERVER_COMPAT's release) rather than whatever `go` is
-	// first on PATH. `GOTOOLCHAIN=auto` would honour the go.mod directive too, but
-	// pinning explicitly makes the version deterministic and visible.
-	conformanceGoToolchain = "go1.26.2"
 )
 
 func main() {
@@ -130,57 +94,22 @@ func main() {
 // returns nil here; the failing outcomes live in the -json results for the
 // report to classify.
 func run() error {
-	addr := os.Getenv(seamAddrEnv)
-	var proc *tokeiradProcess
-
-	if addr == "" {
-		// No operator-managed frontend: boot one from the prebuilt binary.
-		bin := os.Getenv(tokeiradBinEnv)
-		if bin == "" {
-			return fmt.Errorf(
-				"neither %s nor %s is set: set %s to a prebuilt tokeirad binary to boot one, "+
-					"or set %s to an already-running frontend",
-				seamAddrEnv, tokeiradBinEnv, tokeiradBinEnv, seamAddrEnv)
-		}
-		var err error
-		proc, err = bootTokeirad(bin)
-		if err != nil {
-			return err
-		}
-		defer proc.stop()
-		addr = proc.addr
-
-		if err := waitReady(addr, readyTimeout); err != nil {
-			return err
-		}
+	proc, addr, metricsAddr, controlAddr, err := runner.BootOrReuse()
+	if err != nil {
+		return err
+	}
+	if proc != nil {
+		defer proc.Stop()
+		// Terminate a booted tokeirad cleanly if the operator interrupts the run.
+		runner.InstallSignalCleanup(proc)
 		fmt.Printf("tokeira-conformance-runall: tokeirad serving at %s\n", addr)
 	} else {
 		fmt.Printf("tokeira-conformance-runall: reusing operator-managed frontend at %s\n", addr)
 	}
 
-	// Terminate a booted tokeirad cleanly if the operator interrupts the run.
-	if proc != nil {
-		installSignalCleanup(proc)
-	}
-
 	resultsPath := os.Getenv(resultsPathEnv)
 	if resultsPath == "" {
 		resultsPath = defaultResultsPath
-	}
-
-	// The metrics bridge needs tokeirad's /metrics address. For a frontend we booted,
-	// that is the port we assigned; in reuse mode it is whatever the operator exported
-	// (empty disables the bridge, leaving metric-asserting tests to fail honestly).
-	metricsAddr := os.Getenv(metricsAddrEnv)
-	if proc != nil {
-		metricsAddr = proc.metricsAddr
-	}
-
-	// Same boot-or-reuse handling as the metrics address: use the port we assigned when we booted
-	// tokeirad, else pass through whatever the operator exported (empty leaves the bridge to no-op).
-	controlAddr := os.Getenv(controlAddrEnv)
-	if proc != nil {
-		controlAddr = proc.controlAddr
 	}
 
 	return runCorpus(addr, metricsAddr, controlAddr, resultsPath)
@@ -285,16 +214,16 @@ func runEntrypoint(addr, metricsAddr, controlAddr, name string, results io.Write
 	cmd := exec.Command("go", args...)
 	// Pin the toolchain to the version the corpus's go.mod requires so runs do not
 	// silently use whatever `go` is first on PATH.
-	cmd.Env = append(os.Environ(), seamAddrEnv+"="+addr, "GOTOOLCHAIN="+conformanceGoToolchain)
+	cmd.Env = append(os.Environ(), runner.SeamAddrEnv+"="+addr, "GOTOOLCHAIN="+runner.GoToolchain)
 	// Hand the corpus tokeirad's /metrics address so the conformance cluster stands up the
 	// scrape-backed CaptureMetricsHandler for metric-asserting tests; omitted when unknown.
 	if metricsAddr != "" {
-		cmd.Env = append(cmd.Env, metricsAddrEnv+"="+metricsAddr)
+		cmd.Env = append(cmd.Env, runner.MetricsAddrEnv+"="+metricsAddr)
 	}
 	// Hand the corpus tokeirad's control-service address so the dynamic-config bridge can deliver
 	// OverrideDynamicConfig; omitted when unknown (the bridge then no-ops).
 	if controlAddr != "" {
-		cmd.Env = append(cmd.Env, controlAddrEnv+"="+controlAddr)
+		cmd.Env = append(cmd.Env, runner.ControlAddrEnv+"="+controlAddr)
 	}
 	cmd.Stdout = io.MultiWriter(results, os.Stdout)
 	cmd.Stderr = os.Stderr
@@ -325,7 +254,7 @@ func runEntrypoint(addr, metricsAddr, controlAddr, name string, results io.Write
 // builds against the same configuration the run uses.
 func listEntrypoints(addr string) ([]string, error) {
 	cmd := exec.Command("go", "test", "-tags", "test_dep", "-list", ".*", corpusPattern)
-	cmd.Env = append(os.Environ(), seamAddrEnv+"="+addr, "GOTOOLCHAIN="+conformanceGoToolchain)
+	cmd.Env = append(os.Environ(), runner.SeamAddrEnv+"="+addr, "GOTOOLCHAIN="+runner.GoToolchain)
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
 	if err != nil {
@@ -342,144 +271,4 @@ func listEntrypoints(addr string) ([]string, error) {
 		}
 	}
 	return names, nil
-}
-
-// tokeiradProcess is the minimal lifecycle handle for a `tokeirad` frontend the
-// runner boots itself. It intentionally duplicates the few lines of lifecycle
-// the testing-coupled harness (tokeira_harness.go) provides rather than
-// depending on it, because that harness is built around *testing.T and belongs
-// to the test binary, not this standalone command.
-type tokeiradProcess struct {
-	cmd         *exec.Cmd
-	addr        string
-	metricsAddr string
-	controlAddr string
-}
-
-// bootTokeirad launches `tokeirad` on a free loopback port with a minimal
-// in-memory TOML config (only infrastructure.network.grpc_addr is set; every
-// other field defaults, which selects in-memory storage). The config lives in a
-// temp dir that is cleaned up when the process stops.
-func bootTokeirad(bin string) (*tokeiradProcess, error) {
-	addr, err := freeLoopbackAddr()
-	if err != nil {
-		return nil, err
-	}
-	// A second free port for tokeirad's Prometheus /metrics endpoint so the corpus's
-	// metrics bridge can scrape it (metrics_enabled defaults true). Distinct from the
-	// default 0.0.0.0:9090 to keep parallel runs from colliding.
-	metricsAddr, err := freeLoopbackAddr()
-	if err != nil {
-		return nil, err
-	}
-	// A third free port for tokeirad's conformance dynamic-config control service, delivered via
-	// TOKEIRA_CONFORMANCE_CONTROL_ADDR. tokeirad binds and answers here only in a `conformance`
-	// build; the dynamic-config bridge posts overrides to it.
-	controlAddr, err := freeLoopbackAddr()
-	if err != nil {
-		return nil, err
-	}
-
-	dir, err := os.MkdirTemp("", "tokeira-conformance-runall")
-	if err != nil {
-		return nil, fmt.Errorf("create temp config dir: %w", err)
-	}
-	cfgPath := filepath.Join(dir, "tokeirad-conformance.toml")
-	cfg := fmt.Sprintf(
-		"[infrastructure.network]\ngrpc_addr = %q\nmetrics_addr = %q\n",
-		addr, metricsAddr,
-	)
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
-		return nil, fmt.Errorf("write tokeirad config %q: %w", cfgPath, err)
-	}
-
-	cmd := exec.Command(bin, "--config", cfgPath)
-	// Deliver the control-service bind address to the child; ignored by a non-conformance build.
-	cmd.Env = append(os.Environ(), controlAddrEnv+"="+controlAddr)
-	cmd.Stdout = os.Stderr // tokeirad logs go to stderr so stdout stays the -json stream
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start tokeirad %q: %w", bin, err)
-	}
-
-	return &tokeiradProcess{cmd: cmd, addr: addr, metricsAddr: metricsAddr, controlAddr: controlAddr}, nil
-}
-
-// stop terminates the `tokeirad` subprocess: SIGTERM first to let it drain, then
-// SIGKILL after a short grace window. Best-effort but reliable — it must not leak
-// a process holding the ephemeral port.
-func (p *tokeiradProcess) stop() {
-	if p == nil || p.cmd == nil || p.cmd.Process == nil {
-		return
-	}
-	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		p.cmd = nil
-		return
-	}
-	done := make(chan error, 1)
-	go func() { done <- p.cmd.Wait() }()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		_ = p.cmd.Process.Kill()
-		<-done
-	}
-	p.cmd = nil
-}
-
-// waitReady polls the frontend's WorkflowService until GetSystemInfo succeeds or
-// the timeout elapses. Per design caveat 1, readiness is "can a caller reach the
-// WorkflowService surface the corpus uses?" — GetSystemInfo is read-only and is
-// the same surface FrontendClient() reaches — not a gRPC health-protocol probe,
-// which `tokeirad` is not confirmed to serve.
-func waitReady(addr string, timeout time.Duration) error {
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return fmt.Errorf("dial frontend %q: %w", addr, err)
-	}
-	defer func() { _ = conn.Close() }()
-
-	client := workflowservice.NewWorkflowServiceClient(conn)
-	deadline := time.Now().Add(timeout)
-	const pollInterval = 100 * time.Millisecond
-	var lastErr error
-	for time.Now().Before(deadline) {
-		ctx, cancel := context.WithTimeout(context.Background(), pollInterval)
-		_, lastErr = client.GetSystemInfo(ctx, &workflowservice.GetSystemInfoRequest{})
-		cancel()
-		if lastErr == nil {
-			return nil
-		}
-		time.Sleep(pollInterval)
-	}
-	return fmt.Errorf("frontend %q not ready after %s: %w", addr, timeout, lastErr)
-}
-
-// installSignalCleanup ensures a booted `tokeirad` is torn down if the operator
-// interrupts the run (Ctrl-C / SIGTERM), so an aborted manual run never leaks a
-// process holding the ephemeral port.
-func installSignalCleanup(proc *tokeiradProcess) {
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigs
-		proc.stop()
-		os.Exit(130)
-	}()
-}
-
-// freeLoopbackAddr returns a currently-free 127.0.0.1:<port> using the standard
-// bind-:0-then-close trick. The TOCTOU window before `tokeirad` binds is benign:
-// loopback ephemeral reuse is rare and waitReady would surface a genuine bind
-// failure as a never-ready timeout.
-func freeLoopbackAddr() (string, error) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return "", fmt.Errorf("reserve free port: %w", err)
-	}
-	addr := listener.Addr().String()
-	if err := listener.Close(); err != nil {
-		return "", fmt.Errorf("release reserved port %q: %w", addr, err)
-	}
-	return addr, nil
 }
