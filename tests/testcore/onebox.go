@@ -1012,7 +1012,16 @@ func sdkClientFactoryProvider(
 }
 
 func (c *TemporalImpl) overrideDynamicConfig(t *testing.T, name dynamicconfig.Key, value any) func() {
-	cleanup := c.dcClient.PartialOverrideValue(name, value)
+	inProcess := c.dcClient.PartialOverrideValue(name, value)
+	// Tokeira Tier-2 conformance: the in-process MemoryClient write above is invisible to an
+	// out-of-process tokeirad, so also deliver the override through tokeirad's control RPC
+	// (tokeira_dynamic_config_bridge.go). A no-op outside conformance mode or for a key tokeira
+	// does not honour; it never fails the test (skip registry / config-as-constant cover those).
+	controlCleanup := deliverConformanceDynamicConfigOverride(t, name, value)
+	cleanup := func() {
+		controlCleanup()
+		inProcess()
+	}
 	t.Cleanup(cleanup)
 	return cleanup
 }

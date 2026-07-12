@@ -79,6 +79,13 @@ const (
 	// Mirrors tokeira_metrics_bridge.go's tokeiraMetricsAddrEnv (duplicated like seamAddrEnv
 	// rather than imported — this standalone command does not depend on the test package).
 	metricsAddrEnv = "TOKEIRA_CONFORMANCE_METRICS_ADDR"
+	// controlAddrEnv carries tokeirad's conformance dynamic-config control-service host:port to
+	// the corpus (read by the dynamic-config bridge in tokeira_dynamic_config_bridge.go). The
+	// runner exports it for a frontend it boots; in reuse mode it passes through whatever the
+	// operator set. A listener answers there only when tokeirad was built with the `conformance`
+	// feature; absent it, the bridge no-ops. Duplicated like seamAddrEnv — this standalone command
+	// does not depend on the test package.
+	controlAddrEnv = "TOKEIRA_CONFORMANCE_CONTROL_ADDR"
 	// resultsPathEnv optionally overrides where the machine-readable `go test
 	// -json` event stream is written. Task 8.2 consumes this stream to build the
 	// per-test ledger; 8.1 only needs to produce it faithfully.
@@ -169,7 +176,14 @@ func run() error {
 		metricsAddr = proc.metricsAddr
 	}
 
-	return runCorpus(addr, metricsAddr, resultsPath)
+	// Same boot-or-reuse handling as the metrics address: use the port we assigned when we booted
+	// tokeirad, else pass through whatever the operator exported (empty leaves the bridge to no-op).
+	controlAddr := os.Getenv(controlAddrEnv)
+	if proc != nil {
+		controlAddr = proc.controlAddr
+	}
+
+	return runCorpus(addr, metricsAddr, controlAddr, resultsPath)
 }
 
 // runCorpus enumerates the complete set of top-level entrypoints in the pinned
@@ -195,7 +209,7 @@ func run() error {
 // Failing or panicking entrypoints are expected (failures are data) and never
 // become a harness error; runCorpus returns an error only for harness-level
 // faults (enumeration failed, empty corpus, results file unwritable).
-func runCorpus(addr, metricsAddr, resultsPath string) error {
+func runCorpus(addr, metricsAddr, controlAddr, resultsPath string) error {
 	entrypoints, err := listEntrypoints(addr)
 	if err != nil {
 		return err
@@ -220,7 +234,7 @@ func runCorpus(addr, metricsAddr, resultsPath string) error {
 	var ran, failed int
 	for i, name := range entrypoints {
 		fmt.Printf("tokeira-conformance-runall: [%d/%d] %s\n", i+1, len(entrypoints), name)
-		if runEntrypoint(addr, metricsAddr, name, results) == entrypointFailed {
+		if runEntrypoint(addr, metricsAddr, controlAddr, name, results) == entrypointFailed {
 			failed++
 		}
 		ran++
@@ -251,7 +265,7 @@ const (
 // crash are both expected outcomes recorded as data; only the coarse outcome is
 // returned for the operator tally. The process is fully isolated, so a panic
 // here cannot affect any other entrypoint.
-func runEntrypoint(addr, metricsAddr, name string, results io.Writer) entrypointOutcome {
+func runEntrypoint(addr, metricsAddr, controlAddr, name string, results io.Writer) entrypointOutcome {
 	args := []string{
 		"test",
 		"-tags", "test_dep",
@@ -276,6 +290,11 @@ func runEntrypoint(addr, metricsAddr, name string, results io.Writer) entrypoint
 	// scrape-backed CaptureMetricsHandler for metric-asserting tests; omitted when unknown.
 	if metricsAddr != "" {
 		cmd.Env = append(cmd.Env, metricsAddrEnv+"="+metricsAddr)
+	}
+	// Hand the corpus tokeirad's control-service address so the dynamic-config bridge can deliver
+	// OverrideDynamicConfig; omitted when unknown (the bridge then no-ops).
+	if controlAddr != "" {
+		cmd.Env = append(cmd.Env, controlAddrEnv+"="+controlAddr)
 	}
 	cmd.Stdout = io.MultiWriter(results, os.Stdout)
 	cmd.Stderr = os.Stderr
@@ -334,6 +353,7 @@ type tokeiradProcess struct {
 	cmd         *exec.Cmd
 	addr        string
 	metricsAddr string
+	controlAddr string
 }
 
 // bootTokeirad launches `tokeirad` on a free loopback port with a minimal
@@ -352,6 +372,13 @@ func bootTokeirad(bin string) (*tokeiradProcess, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A third free port for tokeirad's conformance dynamic-config control service, delivered via
+	// TOKEIRA_CONFORMANCE_CONTROL_ADDR. tokeirad binds and answers here only in a `conformance`
+	// build; the dynamic-config bridge posts overrides to it.
+	controlAddr, err := freeLoopbackAddr()
+	if err != nil {
+		return nil, err
+	}
 
 	dir, err := os.MkdirTemp("", "tokeira-conformance-runall")
 	if err != nil {
@@ -367,13 +394,15 @@ func bootTokeirad(bin string) (*tokeiradProcess, error) {
 	}
 
 	cmd := exec.Command(bin, "--config", cfgPath)
+	// Deliver the control-service bind address to the child; ignored by a non-conformance build.
+	cmd.Env = append(os.Environ(), controlAddrEnv+"="+controlAddr)
 	cmd.Stdout = os.Stderr // tokeirad logs go to stderr so stdout stays the -json stream
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start tokeirad %q: %w", bin, err)
 	}
 
-	return &tokeiradProcess{cmd: cmd, addr: addr, metricsAddr: metricsAddr}, nil
+	return &tokeiradProcess{cmd: cmd, addr: addr, metricsAddr: metricsAddr, controlAddr: controlAddr}, nil
 }
 
 // stop terminates the `tokeirad` subprocess: SIGTERM first to let it drain, then

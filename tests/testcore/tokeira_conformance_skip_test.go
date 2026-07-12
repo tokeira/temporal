@@ -88,6 +88,30 @@ func TestConformanceSkipRegexp_EagerWorkflow(t *testing.T) {
 	}
 }
 
+func TestConformanceSkipRegexp_WFTFailureReportedProblems(t *testing.T) {
+	const suite = "TestWFTFailureReportedProblemsTestSuite"
+	// The reported-problems suite is fully in scope. The dynamic-config bridge
+	// (tokeira_dynamic_config_bridge.go) delivers the reported-problems threshold override to
+	// the out-of-process tokeirad, so DynamicConfigChanges — which mutates it 0->2 mid-run —
+	// runs instead of being skipped. With no leaf registered, the skip regexp is empty.
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern != "" {
+		t.Fatalf("expected no skip regexp for %s (all leaves in scope), got %q", suite, pattern)
+	}
+
+	// Every leaf — including the formerly-skipped DynamicConfigChanges — must run.
+	for _, name := range []string{
+		suite + "/TestWFTFailureReportedProblems_SetAndClear",
+		suite + "/TestWFTFailureReportedProblems_NotClearedBySignals",
+		suite + "/TestWFTFailureReportedProblems_SetAndClear_FailAfterActivity",
+		suite + "/TestWFTFailureReportedProblems_DynamicConfigChanges",
+	} {
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
 func TestConformanceSkipRegexp_SizeLimit(t *testing.T) {
 	const suite = "TestSizeLimitFunctionalSuite"
 	pattern := ConformanceSkipRegexp(suite)
