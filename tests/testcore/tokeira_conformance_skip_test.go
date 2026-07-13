@@ -233,6 +233,38 @@ func TestConformanceSkipRegexp_Namespace(t *testing.T) {
 	}
 }
 
+func TestConformanceSkipRegexp_ScheduleV1Internals(t *testing.T) {
+	const suite = "TestScheduleV1"
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern == "" {
+		t.Fatalf("expected a skip regexp for %s", suite)
+	}
+
+	for _, leaf := range []string{
+		"TestRefresh",
+		"TestNextTimeCache",
+		"TestCreatesCHASMSentinel",
+		"TestSkipsCHASMSentinelWhenDisabled",
+	} {
+		name := suite + "/" + leaf
+		if !matchesSkip(t, pattern, name) {
+			t.Errorf("expected %q to be skipped by %q", name, pattern)
+		}
+	}
+
+	for _, leaf := range []string{
+		"TestBasics",
+		"TestRateLimit",
+		"TestLastCompletionAndError",
+		"TestUpdateScheduleMemoRejected",
+	} {
+		name := suite + "/" + leaf
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
 func TestConformanceSkipRegexp_UnknownEntrypointIsEmpty(t *testing.T) {
 	if got := ConformanceSkipRegexp("TestNoSuchSuite"); got != "" {
 		t.Errorf("expected empty skip regexp for an unregistered entrypoint, got %q", got)

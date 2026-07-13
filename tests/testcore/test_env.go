@@ -22,6 +22,7 @@ import (
 	"go.temporal.io/server/common/dynamicconfig"
 	"go.temporal.io/server/common/log"
 	"go.temporal.io/server/common/namespace"
+	"go.temporal.io/server/common/testing/protorequire"
 	"go.temporal.io/server/common/testing/taskpoller"
 	"go.temporal.io/server/common/testing/testhooks"
 	"go.temporal.io/server/common/testing/testvars"
@@ -62,6 +63,10 @@ type TestEnv struct {
 	// share the same *FunctionalTestBase cluster.
 	// TODO: remove once all tests are migrated to TestEnv (and no longer use FunctionalTestBase directly).
 	*require.Assertions
+	// Shadows FunctionalTestBase.ProtoAssertions for the same reason as
+	// Assertions above: pooled bases are initialized outside this subtest and
+	// therefore carry no *testing.T in Shape-2 runs.
+	protorequire.ProtoAssertions
 
 	Logger log.Logger
 
@@ -178,6 +183,7 @@ func NewEnv(t *testing.T, opts ...TestOption) *TestEnv {
 	env := &TestEnv{
 		FunctionalTestBase: base,
 		Assertions:         require.New(t),
+		ProtoAssertions:    protorequire.New(t),
 		cluster:            cluster,
 		nsName:             ns,
 		nsID:               nsID,

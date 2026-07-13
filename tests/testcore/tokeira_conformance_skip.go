@@ -548,6 +548,36 @@ var conformanceSkips = []conformanceSkip{
 			"outside the public Shape-2 contract; public queue stats and API/worker rate limits " +
 			"remain covered by active sibling leaves.",
 	},
+	{
+		nameContains: "TestScheduleV1/TestRefresh",
+		reason: "directly reads and signals Temporal's internal scheduler workflow " +
+			"(temporal-sys-scheduler:<schedule-id>) to validate its refresh implementation " +
+			"(tests/schedule_test.go @ v1.31.0). tokeira implements schedules as a native " +
+			"runtime store and engine, so no internal scheduler workflow exists; public " +
+			"Describe/Update/List behavior remains covered by active sibling leaves.",
+	},
+	{
+		nameContains: "TestScheduleV1/TestNextTimeCache",
+		reason: "white-box inspects Temporal's internal scheduler workflow history, SideEffect " +
+			"marker count, and serialized NextTimeCache (tests/schedule_test.go @ v1.31.0). " +
+			"Those are implementation details of Temporal's workflow-backed scheduler; " +
+			"tokeira's native schedule engine has no equivalent internal history.",
+	},
+	{
+		nameContains: "TestScheduleV1/TestCreatesCHASMSentinel",
+		reason: "directly calls the in-process SchedulerClient to inspect CHASM sentinel " +
+			"reservation for a V1 scheduler workflow (tests/schedule_test.go @ v1.31.0). " +
+			"Shape-2 exposes the public WorkflowService only; SchedulerClient is unavailable " +
+			"and otherwise nil-dereferences, while CHASM migration sentinels are outside the " +
+			"v1.31.0 public compatibility claim.",
+	},
+	{
+		nameContains: "TestScheduleV1/TestSkipsCHASMSentinelWhenDisabled",
+		reason: "directly calls the in-process SchedulerClient and toggles " +
+			"EnableCHASMSchedulerSentinels to inspect absence of an internal migration sentinel " +
+			"(tests/schedule_test.go @ v1.31.0). Shape-2 has no SchedulerClient and tokeira's " +
+			"native V1 schedule engine does not model CHASM migration sentinels.",
+	},
 }
 
 // conformanceSkipReason returns the skip reason for a test name when one is

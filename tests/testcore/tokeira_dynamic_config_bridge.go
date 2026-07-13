@@ -98,6 +98,18 @@ func deliverConformanceDynamicConfigOverride(t *testing.T, name dynamicconfig.Ke
 // model, so the caller logs and no-ops rather than inventing a value.
 func encodeDynamicConfigOverrideValue(value any) (string, bool) {
 	switch v := value.(type) {
+	case []dynamicconfig.ConstrainedValue:
+		// TestEnv wraps namespace-scoped settings in one constrained value so
+		// shared-onebox tests remain isolated. The out-of-process conformance
+		// runner executes one suite serially and provisions a fresh tokeirad, so
+		// the namespace constraint is already supplied by process isolation; only
+		// the wrapped scalar needs to cross the control wire. Multiple constrained
+		// alternatives remain deliberately unsupported because flattening them
+		// would invent precedence semantics.
+		if len(v) != 1 {
+			return "", false
+		}
+		return encodeDynamicConfigOverrideValue(v[0].Value)
 	case int:
 		return fmt.Sprintf(`{"intValue":%s}`, strconv.Quote(strconv.FormatInt(int64(v), 10))), true
 	case int32:
