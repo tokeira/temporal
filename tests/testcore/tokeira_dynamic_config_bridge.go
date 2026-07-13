@@ -94,8 +94,9 @@ func deliverConformanceDynamicConfigOverride(t *testing.T, name dynamicconfig.Ke
 
 // encodeDynamicConfigOverrideValue maps a Go dynamic-config value to the JSON body of the
 // DynamicConfigValue oneof. Proto3 JSON encodes int64 (int_value, duration_nanos) as a string,
-// matching tokeira's buffa serializer. Returns ok=false for a type the control proto does not
-// model, so the caller logs and no-ops rather than inventing a value.
+// matching tokeira's buffa serializer. Composite values are serialized into json_value; the wired
+// consumer owns their setting-specific schema. Returns ok=false only when JSON cannot represent the
+// value, so the caller logs and no-ops rather than inventing one.
 func encodeDynamicConfigOverrideValue(value any) (string, bool) {
 	switch v := value.(type) {
 	case []dynamicconfig.ConstrainedValue:
@@ -127,7 +128,11 @@ func encodeDynamicConfigOverrideValue(value any) (string, bool) {
 	case time.Duration:
 		return fmt.Sprintf(`{"durationNanos":%s}`, strconv.Quote(strconv.FormatInt(int64(v), 10))), true
 	default:
-		return "", false
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return "", false
+		}
+		return fmt.Sprintf(`{"jsonValue":%s}`, strconv.Quote(string(raw))), true
 	}
 }
 

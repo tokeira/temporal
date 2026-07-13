@@ -270,3 +270,13 @@ func TestConformanceSkipRegexp_UnknownEntrypointIsEmpty(t *testing.T) {
 		t.Errorf("expected empty skip regexp for an unregistered entrypoint, got %q", got)
 	}
 }
+
+func TestConformanceSkipRegexp_CallbacksClassifiesOnlyCHASM(t *testing.T) {
+	pattern := ConformanceSkipRegexp("TestCallbacksSuiteCHASM")
+	if !matchesSkip(t, pattern, "TestCallbacksSuiteCHASM") {
+		t.Fatalf("expected CHASM callbacks suite to be skipped by %q", pattern)
+	}
+	if got := ConformanceSkipRegexp("TestCallbacksSuiteHSM"); got != "" {
+		t.Fatalf("expected HSM callbacks suite to remain active, got skip regexp %q", got)
+	}
+}

@@ -10,12 +10,13 @@ import (
 //
 // The Tier-2 functional conformance harness replays Temporal's UNMODIFIED Go
 // corpus over the real gRPC wire against an external `tokeirad`. A small number
-// of corpus tests cannot run in that mode because they depend on
-// `OverrideDynamicConfig`, which the harness cannot deliver to an out-of-process
-// server (it writes to the in-process onebox MemoryClient). Rather than edit the
-// corpus, we skip these by name in the shared SetupTest/SetupSubTest hooks, and
-// ONLY when conformance mode is active — a normal Temporal test run is
-// unaffected.
+// of corpus tests cannot run in that mode because they require in-process
+// internals, excluded implementation modes, or an override key Tokeira cannot
+// honour without violating the kernel boundary. Supported runtime/edge overrides
+// are delivered through the conformance control bridge. Rather than edit the
+// corpus, we skip the remaining exclusions by name in the shared
+// SetupTest/SetupSubTest hooks, and ONLY when conformance mode is active — a
+// normal Temporal test run is unaffected.
 //
 // Each entry records WHY the test is out of scope so the skip is auditable.
 // `nameContains` matches `t.Name()` on path-segment boundaries (see
@@ -37,6 +38,13 @@ const workerVersioningEnabledPathReason = "requires the suite's non-default " +
 	"version sets, rules, reachability, and scavenging semantics."
 
 var conformanceSkips = []conformanceSkip{
+	{
+		nameContains: "TestCallbacksSuiteCHASM",
+		reason: "runs the callbacks corpus with EnableChasm and EnableCHASMCallbacks enabled " +
+			"(tests/callbacks_test.go SetupSuite @ v1.31.0); CHASM framework internals are " +
+			"outside Tokeira's default v1.31.0 compatibility gate " +
+			"(docs/conformance/v1.31.0/excluded.md). The HSM sibling remains active.",
+	},
 	{
 		nameContains: "TestAdvancedVisibilitySuite/Test_BuildIdIndexedOnCompletion_VersionedWorker",
 		reason:       workerVersioningEnabledPathReason,
