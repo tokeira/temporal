@@ -497,6 +497,23 @@ var conformanceSkips = []conformanceSkip{
 			"(nil MatchingClient SIGSEGVs the versioned-poller goroutine). Worker deployment versioning " +
 			"is Tier-4+ scope. Matching-service/versioning-class skip.",
 	},
+	{
+		nameContains: "TestNamespaceSuite/Test_NamespaceDelete_WithMissingWorkflows",
+		reason: "directly calls GetTestCluster().ExecutionManager().DeleteWorkflowExecution to " +
+			"remove mutable state while deliberately leaving visibility rows behind " +
+			"(tests/namespace_delete_test.go @ v1.31.0). Shape-2 has no in-process Temporal " +
+			"ExecutionManager; namespace deletion over the public OperatorService is covered by " +
+			"the sibling namespace-delete leaves. ExecutionManager-class skip.",
+	},
+	{
+		nameContains: "TestNamespaceSuite/Test_NamespaceDelete_Protected",
+		reason: "requires a per-test OverrideDynamicConfig(worker.protectedNamespaces, []string{random " +
+			"namespace}) and asserts that policy's FailedPrecondition response " +
+			"(tests/namespace_delete_test.go and common/dynamicconfig/constants.go @ v1.31.0). " +
+			"The conformance override protocol has no string-list value kind and tokeira does not " +
+			"implement this deployment-policy key; the public deletion path remains covered by the " +
+			"sibling leaves. OverrideDynamicConfig-class skip.",
+	},
 }
 
 // conformanceSkipReason returns the skip reason for a test name when one is

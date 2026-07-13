@@ -170,6 +170,38 @@ func TestConformanceSkipRegexp_SizeLimit(t *testing.T) {
 	}
 }
 
+func TestConformanceSkipRegexp_Namespace(t *testing.T) {
+	const suite = "TestNamespaceSuite"
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern == "" {
+		t.Fatalf("expected a skip regexp for %s", suite)
+	}
+
+	for _, leaf := range []string{
+		"Test_NamespaceDelete_WithMissingWorkflows",
+		"Test_NamespaceDelete_Protected",
+	} {
+		name := suite + "/" + leaf
+		if !matchesSkip(t, pattern, name) {
+			t.Errorf("expected %q to be skipped by %q", name, pattern)
+		}
+	}
+
+	for _, leaf := range []string{
+		"Test_NamespaceDelete_Empty",
+		"Test_NamespaceDelete_OverrideDelay",
+		"Test_NamespaceDelete_Empty_WithID",
+		"Test_NamespaceDelete_WithNameAndID",
+		"Test_NamespaceDelete_WithWorkflows",
+		"Test_NamespaceDelete_CrossNamespaceChild",
+	} {
+		name := suite + "/" + leaf
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
 func TestConformanceSkipRegexp_UnknownEntrypointIsEmpty(t *testing.T) {
 	if got := ConformanceSkipRegexp("TestNoSuchSuite"); got != "" {
 		t.Errorf("expected empty skip regexp for an unregistered entrypoint, got %q", got)
