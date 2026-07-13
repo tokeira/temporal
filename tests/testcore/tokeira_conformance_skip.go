@@ -514,6 +514,40 @@ var conformanceSkips = []conformanceSkip{
 			"implement this deployment-policy key; the public deletion path remains covered by the " +
 			"sibling leaves. OverrideDynamicConfig-class skip.",
 	},
+	{
+		nameContains: "TestTaskQueueSuite/TestTaskDispatchLatencyMetric_WorkflowAndActivity",
+		reason: "requires the in-process MatchingClient.DescribeTaskQueuePartition RPC, " +
+			"CaptureMetricsHandler, MatchingForwardTaskDelay test hook, and constrained " +
+			"WithDynamicConfig values (tests/task_queue_test.go @ v1.31.0); Shape-2 fronts " +
+			"the public WorkflowService only, so these matching-internal metric assertions " +
+			"cannot execute against an out-of-process tokeirad.",
+	},
+	{
+		nameContains: "TestTaskQueueSuite/TestTaskDispatchLatencyMetric_Query",
+		reason: "requires the in-process MatchingClient.DescribeTaskQueuePartition RPC, " +
+			"CaptureMetricsHandler, MatchingForwardTaskDelay test hook, and constrained " +
+			"WithDynamicConfig values (tests/task_queue_test.go @ v1.31.0); Shape-2 fronts " +
+			"the public WorkflowService only, so these matching-internal metric assertions " +
+			"cannot execute against an out-of-process tokeirad.",
+	},
+	{
+		nameContains: "TestTaskQueueSuite/TestTaskDispatchLatencyMetric_Nexus",
+		reason: "requires the in-process MatchingClient DescribeTaskQueuePartition and " +
+			"DispatchNexusTask RPCs, CaptureMetricsHandler, MatchingForwardTaskDelay test " +
+			"hook, and constrained WithDynamicConfig values (tests/task_queue_test.go @ " +
+			"v1.31.0); Shape-2 fronts the public WorkflowService only, so the leaf otherwise " +
+			"nil-dereferences the unavailable matching client and aborts its process.",
+	},
+	{
+		nameContains: "TestTaskQueueSuite/TestTaskQueueRateLimit",
+		reason: "tests Temporal matching implementation modes and partition forwarding by " +
+			"mutating MatchingUseNewMatcher, read/write partition counts, forwarder rate, and " +
+			"AdminMatchingNamespaceTaskqueueToPartitionDispatchRate, then comparing four " +
+			"mode/partition drain budgets (tests/task_queue_test.go:57-160 @ v1.31.0). Tokeira " +
+			"has one matching partition and no old/new matcher mode, so the test premise is " +
+			"outside the public Shape-2 contract; public queue stats and API/worker rate limits " +
+			"remain covered by active sibling leaves.",
+	},
 }
 
 // conformanceSkipReason returns the skip reason for a test name when one is
