@@ -46,6 +46,9 @@ const (
 	// answers there only when tokeirad was built with the `conformance` feature;
 	// absent it, the bridge no-ops.
 	ControlAddrEnv = "TOKEIRA_CONFORMANCE_CONTROL_ADDR"
+	// AuthCallbackURLEnv carries the corpus process's loopback authorization
+	// callback URL to conformance-mode tokeirad.
+	AuthCallbackURLEnv = "TOKEIRA_CONFORMANCE_AUTH_CALLBACK_URL"
 )
 
 const (
@@ -63,10 +66,11 @@ const (
 // itself. The address fields are also valid in reuse mode (populated by
 // BootOrReuse from the operator's environment) so callers read them uniformly.
 type Process struct {
-	cmd         *exec.Cmd
-	Addr        string
-	MetricsAddr string
-	ControlAddr string
+	cmd             *exec.Cmd
+	Addr            string
+	MetricsAddr     string
+	ControlAddr     string
+	AuthCallbackURL string
 }
 
 // BootOrReuse returns a tokeirad frontend for the corpus to run against.
@@ -80,28 +84,28 @@ type Process struct {
 //
 // The caller owns teardown of a booted process: when proc is non-nil, defer
 // proc.Stop() and (for an interactive run) call InstallSignalCleanup(proc).
-func BootOrReuse() (proc *Process, addr, metricsAddr, controlAddr string, err error) {
+func BootOrReuse() (proc *Process, addr, metricsAddr, controlAddr, authCallbackURL string, err error) {
 	if addr = os.Getenv(SeamAddrEnv); addr != "" {
-		return nil, addr, os.Getenv(MetricsAddrEnv), os.Getenv(ControlAddrEnv), nil
+		return nil, addr, os.Getenv(MetricsAddrEnv), os.Getenv(ControlAddrEnv), os.Getenv(AuthCallbackURLEnv), nil
 	}
 	bin := os.Getenv(TokeiradBinEnv)
 	if bin == "" {
-		return nil, "", "", "", fmt.Errorf(
+		return nil, "", "", "", "", fmt.Errorf(
 			"neither %s nor %s is set: set %s to a prebuilt tokeirad binary to boot one, "+
 				"or set %s to an already-running frontend",
 			SeamAddrEnv, TokeiradBinEnv, TokeiradBinEnv, SeamAddrEnv)
 	}
 	proc, err = boot(bin)
 	if err != nil {
-		return nil, "", "", "", err
+		return nil, "", "", "", "", err
 	}
 	// Tear the just-booted process down on a readiness failure so a frontend that
 	// never came up does not leak a process holding the ephemeral port.
 	if err = WaitReady(proc.Addr, ReadyTimeout); err != nil {
 		proc.Stop()
-		return nil, "", "", "", err
+		return nil, "", "", "", "", err
 	}
-	return proc, proc.Addr, proc.MetricsAddr, proc.ControlAddr, nil
+	return proc, proc.Addr, proc.MetricsAddr, proc.ControlAddr, proc.AuthCallbackURL, nil
 }
 
 // boot launches tokeirad on free loopback ports with a minimal in-memory TOML
@@ -127,6 +131,11 @@ func boot(bin string) (*Process, error) {
 	if err != nil {
 		return nil, err
 	}
+	authCallbackAddr, err := freeLoopbackAddr()
+	if err != nil {
+		return nil, err
+	}
+	authCallbackURL := "http://" + authCallbackAddr + "/authorize"
 
 	dir, err := os.MkdirTemp("", "tokeira-conformance-runner")
 	if err != nil {
@@ -144,7 +153,11 @@ func boot(bin string) (*Process, error) {
 	cmd := exec.Command(bin, "--config", cfgPath)
 	// Deliver the control-service bind address to the child; ignored by a
 	// non-conformance build.
-	cmd.Env = append(os.Environ(), ControlAddrEnv+"="+controlAddr)
+	cmd.Env = append(
+		os.Environ(),
+		ControlAddrEnv+"="+controlAddr,
+		AuthCallbackURLEnv+"="+authCallbackURL,
+	)
 	// tokeirad logs go to stderr so a runner's stdout stays clean for its own output.
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
@@ -152,7 +165,10 @@ func boot(bin string) (*Process, error) {
 		return nil, fmt.Errorf("start tokeirad %q: %w", bin, err)
 	}
 
-	return &Process{cmd: cmd, Addr: addr, MetricsAddr: metricsAddr, ControlAddr: controlAddr}, nil
+	return &Process{
+		cmd: cmd, Addr: addr, MetricsAddr: metricsAddr, ControlAddr: controlAddr,
+		AuthCallbackURL: authCallbackURL,
+	}, nil
 }
 
 // Stop terminates the tokeirad subprocess: SIGTERM first to let it drain, then

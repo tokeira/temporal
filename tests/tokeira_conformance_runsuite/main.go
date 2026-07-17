@@ -61,7 +61,7 @@ func run() (int, error) {
 				"(e.g. '^TestWFTFailureReportedProblemsTestSuite$')")
 	}
 
-	proc, addr, metricsAddr, controlAddr, err := runner.BootOrReuse()
+	proc, addr, metricsAddr, controlAddr, authCallbackURL, err := runner.BootOrReuse()
 	if err != nil {
 		return 1, err
 	}
@@ -73,7 +73,7 @@ func run() (int, error) {
 		fmt.Printf("tokeira-conformance-runsuite: reusing operator-managed frontend at %s\n", addr)
 	}
 
-	outcome := runSuite(addr, metricsAddr, controlAddr, pattern, *timeout)
+	outcome := runSuite(addr, metricsAddr, controlAddr, authCallbackURL, pattern, *timeout)
 	printSummary(pattern, outcome)
 	if !outcome.ok() {
 		return 1, nil
@@ -102,11 +102,15 @@ func (o suiteOutcome) ok() bool { return !o.testExitErr && o.fail == 0 }
 // excluded via the skip registry — the same -skip run-all applies — so a
 // single-suite run classifies identically to the baseline; -skip excludes only
 // the named leaves, never their siblings.
-func runSuite(addr, metricsAddr, controlAddr, pattern string, timeout time.Duration) suiteOutcome {
+func runSuite(addr, metricsAddr, controlAddr, authCallbackURL, pattern string, timeout time.Duration) suiteOutcome {
 	args := []string{
 		"test", corpusPattern,
 		"-tags", "test_dep",
 		"-count=1",
+		// Temporal's dedicated clusters isolate unlabeled metrics. Shape-2 shares
+		// one tokeirad, so serialize parallel-suite leaves to preserve that same
+		// observable capture boundary without inventing metric labels.
+		"-parallel=1",
 		"-timeout", timeout.String(),
 		"-v",
 		"-run", pattern,
@@ -123,6 +127,9 @@ func runSuite(addr, metricsAddr, controlAddr, pattern string, timeout time.Durat
 	}
 	if controlAddr != "" {
 		cmd.Env = append(cmd.Env, runner.ControlAddrEnv+"="+controlAddr)
+	}
+	if authCallbackURL != "" {
+		cmd.Env = append(cmd.Env, runner.AuthCallbackURLEnv+"="+authCallbackURL)
 	}
 
 	var buf bytes.Buffer

@@ -301,6 +301,9 @@ func (c *TemporalImpl) startConformanceFrontend(addr string) error {
 }
 
 func (c *TemporalImpl) Stop() error {
+	if conformanceFrontendAddr() != "" {
+		unregisterConformanceAuthorizationHost(c)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 

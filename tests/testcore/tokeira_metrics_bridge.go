@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.temporal.io/server/common/metrics/metricstest"
@@ -33,6 +34,14 @@ import (
 // tokeiraMetricsAddrEnv carries the tokeirad Prometheus /metrics host:port from the harness
 // to the conformance cluster, paired with TOKEIRA_CONFORMANCE_FRONTEND_ADDR.
 const tokeiraMetricsAddrEnv = "TOKEIRA_CONFORMANCE_METRICS_ADDR"
+
+// Shape-2's dedicated clusters share one out-of-process metrics registry. Serialize
+// capture windows so a metric for a deliberately nonexistent namespace can be assigned
+// honestly to the request that emitted it: unlike successful requests, that namespace
+// can never appear in the cluster's registered-namespace set. The corpus already treats
+// each CaptureMetricsHandler as cluster-local; this mutex recreates that isolation at the
+// scrape seam without changing any test body or fabricating a sample.
+var tokeiraMetricsCaptureMu sync.Mutex
 
 // tokeiraMetricRename maps a tokeira-native Prometheus counter name to the Temporal metric
 // name the functional corpus reads via snap["<temporal name>"]. Only counters the corpus
@@ -43,6 +52,8 @@ var tokeiraMetricRename = map[string]string{
 	"tokeira_edge_nexus_completion_requests_total":                  "nexus_completion_requests",
 	"tokeira_edge_nexus_completion_request_preprocess_errors_total": "nexus_completion_request_preprocess_errors",
 	"tokeira_edge_nexus_task_requests_total":                        "nexus_task_requests",
+	"tokeira_edge_nexus_requests_total":                             "nexus_requests",
+	"tokeira_edge_nexus_request_preprocess_errors_total":            "nexus_request_preprocess_errors",
 	// Speculative workflow task outcome counters (spec speculative-wft M.1/M.2).
 	// commits/rollbacks are read count-only; the timer-task counters carry an
 	// "operation" label = TimerActiveTaskSpeculativeWorkflowTaskTimeout that the
@@ -81,11 +92,17 @@ type scrapedCounter struct {
 func newTokeiraMetricsScrapeSource(metricsURL string, namespaces *conformanceNamespaceSet) func() (func(), func() metricstest.CaptureSnapshot) {
 	client := &http.Client{Timeout: scrapeTimeout}
 	return func() (func(), func() metricstest.CaptureSnapshot) {
+		tokeiraMetricsCaptureMu.Lock()
 		baseline := scrapeRenamedCounters(client, metricsURL)
 		var frozen map[string]scrapedCounter // nil until the window is frozen
+		var released bool
 		freeze := func() {
 			if frozen == nil {
 				frozen = scrapeRenamedCounters(client, metricsURL)
+			}
+			if !released {
+				released = true
+				tokeiraMetricsCaptureMu.Unlock()
 			}
 		}
 		onStop := func() { freeze() }
@@ -252,7 +269,13 @@ func synthesizeDelta(baseline, final map[string]scrapedCounter, namespaces *conf
 	snap := metricstest.CaptureSnapshot{}
 	for key, fin := range final {
 		if ns, ok := fin.labels["namespace"]; ok && namespaces != nil && !namespaces.contains(ns) {
-			continue
+			// A namespace-not-found request cannot have been registered in the
+			// owning cluster by definition. Capture windows are serialized above,
+			// so this exact terminal outcome belongs to the active capture; all
+			// other foreign namespace series remain excluded.
+			if fin.labels["outcome"] != "namespace_not_found" {
+				continue
+			}
 		}
 		prev := 0.0
 		if b, ok := baseline[key]; ok {

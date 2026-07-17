@@ -94,7 +94,7 @@ func main() {
 // returns nil here; the failing outcomes live in the -json results for the
 // report to classify.
 func run() error {
-	proc, addr, metricsAddr, controlAddr, err := runner.BootOrReuse()
+	proc, addr, metricsAddr, controlAddr, authCallbackURL, err := runner.BootOrReuse()
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func run() error {
 		resultsPath = defaultResultsPath
 	}
 
-	return runCorpus(addr, metricsAddr, controlAddr, resultsPath)
+	return runCorpus(addr, metricsAddr, controlAddr, authCallbackURL, resultsPath)
 }
 
 // runCorpus enumerates the complete set of top-level entrypoints in the pinned
@@ -138,7 +138,7 @@ func run() error {
 // Failing or panicking entrypoints are expected (failures are data) and never
 // become a harness error; runCorpus returns an error only for harness-level
 // faults (enumeration failed, empty corpus, results file unwritable).
-func runCorpus(addr, metricsAddr, controlAddr, resultsPath string) error {
+func runCorpus(addr, metricsAddr, controlAddr, authCallbackURL, resultsPath string) error {
 	entrypoints, err := listEntrypoints(addr)
 	if err != nil {
 		return err
@@ -163,7 +163,7 @@ func runCorpus(addr, metricsAddr, controlAddr, resultsPath string) error {
 	var ran, failed int
 	for i, name := range entrypoints {
 		fmt.Printf("tokeira-conformance-runall: [%d/%d] %s\n", i+1, len(entrypoints), name)
-		if runEntrypoint(addr, metricsAddr, controlAddr, name, results) == entrypointFailed {
+		if runEntrypoint(addr, metricsAddr, controlAddr, authCallbackURL, name, results) == entrypointFailed {
 			failed++
 		}
 		ran++
@@ -194,12 +194,17 @@ const (
 // crash are both expected outcomes recorded as data; only the coarse outcome is
 // returned for the operator tally. The process is fully isolated, so a panic
 // here cannot affect any other entrypoint.
-func runEntrypoint(addr, metricsAddr, controlAddr, name string, results io.Writer) entrypointOutcome {
+func runEntrypoint(addr, metricsAddr, controlAddr, authCallbackURL, name string, results io.Writer) entrypointOutcome {
 	args := []string{
 		"test",
 		"-tags", "test_dep",
 		"-json",
 		"-count=1",
+		// One entrypoint may still contain parallel-suite leaves. The shared
+		// Tokeira process cannot namespace unlabeled metric counters, whereas
+		// Temporal's dedicated clusters isolate them, so preserve that isolation
+		// by running one leaf at a time.
+		"-parallel=1",
 		"-timeout", perTestTimeout.String(),
 		"-run", "^" + name + "$",
 	}
@@ -224,6 +229,9 @@ func runEntrypoint(addr, metricsAddr, controlAddr, name string, results io.Write
 	// OverrideDynamicConfig; omitted when unknown (the bridge then no-ops).
 	if controlAddr != "" {
 		cmd.Env = append(cmd.Env, runner.ControlAddrEnv+"="+controlAddr)
+	}
+	if authCallbackURL != "" {
+		cmd.Env = append(cmd.Env, runner.AuthCallbackURLEnv+"="+authCallbackURL)
 	}
 	cmd.Stdout = io.MultiWriter(results, os.Stdout)
 	cmd.Stderr = os.Stderr

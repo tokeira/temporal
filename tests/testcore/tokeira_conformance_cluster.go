@@ -30,19 +30,24 @@ package testcore
 // zero edits to functional_test_base.go.
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"testing"
 
 	deploymentpb "go.temporal.io/api/deployment/v1"
+	nexuspb "go.temporal.io/api/nexus/v1"
 	"go.temporal.io/api/operatorservice/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/server/api/adminservice/v1"
+	clockspb "go.temporal.io/server/api/clock/v1"
 	"go.temporal.io/server/api/matchingservice/v1"
+	persistencespb "go.temporal.io/server/api/persistence/v1"
 	"go.temporal.io/server/common/cluster"
 	"go.temporal.io/server/common/dynamicconfig"
 	"go.temporal.io/server/common/log"
@@ -134,6 +139,7 @@ func newConformanceCluster(
 		return nil, fmt.Errorf("tokeira conformance: dial frontend %q: %w", addr, err)
 	}
 	frontendClient := workflowservice.NewWorkflowServiceClient(conn)
+	operatorClient := operatorservice.NewOperatorServiceClient(conn)
 
 	clusterMetadataConfig := cluster.NewTestClusterMetadataConfig(
 		clusterConfig.ClusterMetadata.EnableGlobalNamespace,
@@ -153,18 +159,21 @@ func newConformanceCluster(
 	// metrics bridge (scopes its scrape to them), so a capture only sees this cluster's
 	// own namespace series on the shared tokeirad /metrics.
 	namespaces := newConformanceNamespaceSet()
+	nexusEndpoints := newConformanceNexusEndpointState(operatorClient, frontendClient, namespaces)
 	testBase := &persistencetests.TestBase{
-		MetadataManager: &conformanceMetadataManager{frontend: frontendClient, namespaces: namespaces},
-		ClusterMetadata: clusterMetadata,
+		MetadataManager:      &conformanceMetadataManager{frontend: frontendClient, namespaces: namespaces},
+		NexusEndpointManager: &conformanceNexusEndpointManager{state: nexusEndpoints},
+		ClusterMetadata:      clusterMetadata,
 	}
 
 	host := &TemporalImpl{
 		logger:         logger,
 		frontendClient: frontendClient,
-		operatorClient: operatorservice.NewOperatorServiceClient(conn),
+		operatorClient: operatorClient,
 		matchingClient: &conformanceMatchingClient{
 			frontend:   frontendClient,
 			namespaces: namespaces,
+			nexus:      nexusEndpoints,
 		},
 		// tokeirad serves a minimal AdminService (DescribeMutableState) on the same
 		// port; the reset suite reads a run's ResetRunId/status through it.
@@ -189,6 +198,7 @@ func newConformanceCluster(
 		},
 		frontendMembershipAddress: addr,
 	}
+	registerConformanceAuthorizationHost(host, namespaces)
 
 	// Tier-2 metrics bridge: when the harness exported tokeirad's /metrics address, install
 	// a CaptureMetricsHandler backed by a scrape-and-diff source so metric-asserting corpus
@@ -228,6 +238,11 @@ type conformanceNamespaceSet struct {
 	ids   map[string]string
 }
 
+// Nexus endpoints are cluster-global and retain the namespace ID stored at creation even
+// after the functional suite that registered that namespace tears down. Keep that identity
+// catalog process-wide while leaving each cluster's metrics scope local to its own set.
+var conformanceNamespaceIDsByName sync.Map
+
 func newConformanceNamespaceSet() *conformanceNamespaceSet {
 	return &conformanceNamespaceSet{
 		names: map[string]struct{}{},
@@ -249,8 +264,9 @@ func (s *conformanceNamespaceSet) addID(id, name string) {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.ids[id] = name
+	s.mu.Unlock()
+	conformanceNamespaceIDsByName.Store(name, id)
 }
 
 func (s *conformanceNamespaceSet) nameForID(id string) (string, bool) {
@@ -258,6 +274,23 @@ func (s *conformanceNamespaceSet) nameForID(id string) (string, bool) {
 	defer s.mu.Unlock()
 	name, ok := s.ids[id]
 	return name, ok
+}
+
+func (s *conformanceNamespaceSet) idForName(name string) (string, bool) {
+	s.mu.Lock()
+	for id, registeredName := range s.ids {
+		if registeredName == name {
+			s.mu.Unlock()
+			return id, true
+		}
+	}
+	s.mu.Unlock()
+	id, ok := conformanceNamespaceIDsByName.Load(name)
+	if !ok {
+		return "", false
+	}
+	registeredID, ok := id.(string)
+	return registeredID, ok
 }
 
 // contains reports whether name was registered. It also reports true when the set is empty
@@ -268,6 +301,16 @@ func (s *conformanceNamespaceSet) contains(name string) bool {
 	if len(s.names) == 0 {
 		return true
 	}
+	_, ok := s.names[name]
+	return ok
+}
+
+// containsExact is the authorization bridge's strict namespace lookup. Unlike
+// metrics filtering, an empty set must not fail open: that could route one
+// dedicated cluster's authorization callback into another cluster.
+func (s *conformanceNamespaceSet) containsExact(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, ok := s.names[name]
 	return ok
 }
@@ -327,14 +370,14 @@ func (m *conformanceMetadataManager) CreateNamespace(
 	return &persistence.CreateNamespaceResponse{ID: id}, nil
 }
 
-// conformanceMatchingClient adapts the sole matching-service read used by GA Worker Deployment
-// corpus tests to the equivalent public WorkflowService projection. Embedding the generated client
-// keeps unsupported matching methods unavailable while allowing this one read to remain honest:
-// DescribeWorkerDeploymentVersion reports every task queue observed for the version.
+// conformanceMatchingClient adapts the internal matching-service reads used by public-behaviour
+// corpus tests to equivalent public service projections. Embedding the generated client keeps every
+// other internal method unavailable rather than accidentally fabricating server state.
 type conformanceMatchingClient struct {
 	matchingservice.MatchingServiceClient
 	frontend   workflowservice.WorkflowServiceClient
 	namespaces *conformanceNamespaceSet
+	nexus      *conformanceNexusEndpointState
 }
 
 func (c *conformanceMatchingClient) CheckTaskQueueVersionMembership(
@@ -377,6 +420,423 @@ func (c *conformanceMatchingClient) CheckTaskQueueVersionMembership(
 		}
 	}
 	return &matchingservice.CheckTaskQueueVersionMembershipResponse{}, nil
+}
+
+// conformanceNexusEndpointState maps the corpus's internal Matching/Persistence endpoint views onto
+// the real OperatorService registry. Endpoint records always come from tokeirad; only Temporal's
+// matching-owner coordination metadata (table version and long-poll notification) lives in-process,
+// because that metadata has no public RPC representation.
+type conformanceNexusEndpointState struct {
+	operator   operatorservice.OperatorServiceClient
+	frontend   workflowservice.WorkflowServiceClient
+	namespaces *conformanceNamespaceSet
+
+	mu           sync.Mutex
+	tableVersion int64
+	changed      chan struct{}
+}
+
+func newConformanceNexusEndpointState(
+	operator operatorservice.OperatorServiceClient,
+	frontend workflowservice.WorkflowServiceClient,
+	namespaces *conformanceNamespaceSet,
+) *conformanceNexusEndpointState {
+	return &conformanceNexusEndpointState{
+		operator:   operator,
+		frontend:   frontend,
+		namespaces: namespaces,
+		changed:    make(chan struct{}),
+	}
+}
+
+func (s *conformanceNexusEndpointState) advanceTableVersion() {
+	s.mu.Lock()
+	s.tableVersion++
+	changed := s.changed
+	s.changed = make(chan struct{})
+	s.mu.Unlock()
+	close(changed)
+}
+
+func (s *conformanceNexusEndpointState) persistenceSpecToAPI(
+	spec *persistencespb.NexusEndpointSpec,
+) (*nexuspb.EndpointSpec, error) {
+	if spec == nil {
+		return nil, nil
+	}
+
+	var target *nexuspb.EndpointTarget
+	switch variant := spec.GetTarget().GetVariant().(type) {
+	case *persistencespb.NexusEndpointTarget_Worker_:
+		namespaceName, ok := s.namespaces.nameForID(variant.Worker.GetNamespaceId())
+		if !ok {
+			return nil, fmt.Errorf(
+				"tokeira conformance: namespace id %q is not registered in this cluster",
+				variant.Worker.GetNamespaceId(),
+			)
+		}
+		target = &nexuspb.EndpointTarget{
+			Variant: &nexuspb.EndpointTarget_Worker_{
+				Worker: &nexuspb.EndpointTarget_Worker{
+					Namespace: namespaceName,
+					TaskQueue: variant.Worker.GetTaskQueue(),
+				},
+			},
+		}
+	case *persistencespb.NexusEndpointTarget_External_:
+		target = &nexuspb.EndpointTarget{
+			Variant: &nexuspb.EndpointTarget_External_{
+				External: &nexuspb.EndpointTarget_External{Url: variant.External.GetUrl()},
+			},
+		}
+	}
+
+	return &nexuspb.EndpointSpec{
+		Name:        spec.GetName(),
+		Description: spec.GetDescription(),
+		Target:      target,
+	}, nil
+}
+
+func (s *conformanceNexusEndpointState) apiEndpointToPersistence(
+	ctx context.Context,
+	endpoint *nexuspb.Endpoint,
+) (*persistencespb.NexusEndpointEntry, error) {
+	if endpoint == nil {
+		return nil, errors.New("tokeira conformance: OperatorService returned an empty Nexus endpoint")
+	}
+
+	publicSpec := endpoint.GetSpec()
+	var target *persistencespb.NexusEndpointTarget
+	switch variant := publicSpec.GetTarget().GetVariant().(type) {
+	case *nexuspb.EndpointTarget_Worker_:
+		namespaceID, ok := s.namespaces.idForName(variant.Worker.GetNamespace())
+		if !ok {
+			response, err := s.frontend.DescribeNamespace(
+				ctx,
+				&workflowservice.DescribeNamespaceRequest{Namespace: variant.Worker.GetNamespace()},
+			)
+			if err != nil {
+				return nil, err
+			}
+			namespaceID = response.GetNamespaceInfo().GetId()
+			if namespaceID == "" {
+				return nil, fmt.Errorf(
+					"tokeira conformance: DescribeNamespace returned no id for %q",
+					variant.Worker.GetNamespace(),
+				)
+			}
+			s.namespaces.addID(namespaceID, variant.Worker.GetNamespace())
+		}
+		target = &persistencespb.NexusEndpointTarget{
+			Variant: &persistencespb.NexusEndpointTarget_Worker_{
+				Worker: &persistencespb.NexusEndpointTarget_Worker{
+					NamespaceId: namespaceID,
+					TaskQueue:   variant.Worker.GetTaskQueue(),
+				},
+			},
+		}
+	case *nexuspb.EndpointTarget_External_:
+		target = &persistencespb.NexusEndpointTarget{
+			Variant: &persistencespb.NexusEndpointTarget_External_{
+				External: &persistencespb.NexusEndpointTarget_External{Url: variant.External.GetUrl()},
+			},
+		}
+	}
+
+	clock := &clockspb.HybridLogicalClock{}
+	// v1.31.0 seeds creates with hlc.Zero and advances the clock on updates. The
+	// public projection omits the cluster-id/version components, but its modification
+	// timestamp preserves the observable wall-clock component needed by this corpus.
+	if endpoint.GetVersion() > 1 && endpoint.GetLastModifiedTime() != nil {
+		clock.WallClock = endpoint.GetLastModifiedTime().AsTime().UnixMilli()
+	}
+
+	return &persistencespb.NexusEndpointEntry{
+		Version: endpoint.GetVersion(),
+		Id:      endpoint.GetId(),
+		Endpoint: &persistencespb.NexusEndpoint{
+			Clock: clock,
+			Spec: &persistencespb.NexusEndpointSpec{
+				Name:        publicSpec.GetName(),
+				Description: publicSpec.GetDescription(),
+				Target:      target,
+			},
+			CreatedTime: endpoint.GetCreatedTime(),
+		},
+	}, nil
+}
+
+func (s *conformanceNexusEndpointState) listAll(
+	ctx context.Context,
+) ([]*persistencespb.NexusEndpointEntry, error) {
+	var endpoints []*nexuspb.Endpoint
+	var pageToken []byte
+	for {
+		response, err := s.operator.ListNexusEndpoints(
+			ctx,
+			&operatorservice.ListNexusEndpointsRequest{
+				PageSize:      1000,
+				NextPageToken: pageToken,
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		endpoints = append(endpoints, response.GetEndpoints()...)
+		if len(response.GetNextPageToken()) == 0 {
+			break
+		}
+		if bytes.Equal(pageToken, response.GetNextPageToken()) {
+			return nil, errors.New("tokeira conformance: Nexus endpoint pagination token did not advance")
+		}
+		pageToken = response.GetNextPageToken()
+	}
+
+	sort.Slice(endpoints, func(i, j int) bool { return endpoints[i].GetId() < endpoints[j].GetId() })
+	entries := make([]*persistencespb.NexusEndpointEntry, len(endpoints))
+	for index, endpoint := range endpoints {
+		entry, err := s.apiEndpointToPersistence(ctx, endpoint)
+		if err != nil {
+			return nil, err
+		}
+		entries[index] = entry
+	}
+	return entries, nil
+}
+
+func (s *conformanceNexusEndpointState) list(
+	ctx context.Context,
+	lastKnownTableVersion int64,
+	nextPageToken []byte,
+	pageSize int,
+	wait bool,
+) (int64, []byte, []*persistencespb.NexusEndpointEntry, error) {
+	if pageSize < 0 {
+		return 0, nil, nil, serviceerror.NewInvalidArgument("page_size is negative")
+	}
+	if wait && len(nextPageToken) != 0 {
+		return 0, nil, nil, serviceerror.NewInvalidArgument(
+			"request Wait=true and NextPageToken!=nil on ListNexusEndpoints request. waiting is only allowed on first page",
+		)
+	}
+
+	if wait && lastKnownTableVersion != 0 {
+		for {
+			s.mu.Lock()
+			currentVersion := s.tableVersion
+			changed := s.changed
+			s.mu.Unlock()
+			if currentVersion != lastKnownTableVersion {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return currentVersion, nil, nil, ctx.Err()
+			case <-changed:
+			}
+		}
+	}
+
+	s.mu.Lock()
+	currentVersion := s.tableVersion
+	s.mu.Unlock()
+	if !wait && lastKnownTableVersion != 0 && lastKnownTableVersion != currentVersion {
+		return currentVersion, nil, nil, serviceerror.NewFailedPreconditionf(
+			"nexus endpoints table version mismatch. received: %v expected %v",
+			lastKnownTableVersion,
+			currentVersion,
+		)
+	}
+
+	entries, err := s.listAll(ctx)
+	if err != nil {
+		return currentVersion, nil, nil, err
+	}
+	start := 0
+	if len(nextPageToken) != 0 {
+		token := string(nextPageToken)
+		start = sort.Search(len(entries), func(index int) bool { return entries[index].GetId() >= token })
+		if start == len(entries) || entries[start].GetId() != token {
+			return currentVersion, nil, nil, serviceerror.NewFailedPrecondition(
+				"could not find endpoint indicated by nexus list endpoints next page token",
+			)
+		}
+	}
+
+	end := min(start+pageSize, len(entries))
+	var followingToken []byte
+	if end < len(entries) {
+		followingToken = []byte(entries[end].GetId())
+	}
+	return currentVersion, followingToken, entries[start:end], nil
+}
+
+func (c *conformanceMatchingClient) CreateNexusEndpoint(
+	ctx context.Context,
+	request *matchingservice.CreateNexusEndpointRequest,
+	_ ...grpc.CallOption,
+) (*matchingservice.CreateNexusEndpointResponse, error) {
+	spec, err := c.nexus.persistenceSpecToAPI(request.GetSpec())
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.nexus.operator.CreateNexusEndpoint(
+		ctx,
+		&operatorservice.CreateNexusEndpointRequest{Spec: spec},
+	)
+	if err != nil {
+		return nil, err
+	}
+	entry, err := c.nexus.apiEndpointToPersistence(ctx, response.GetEndpoint())
+	if err != nil {
+		return nil, err
+	}
+	c.nexus.advanceTableVersion()
+	return &matchingservice.CreateNexusEndpointResponse{Entry: entry}, nil
+}
+
+func (c *conformanceMatchingClient) UpdateNexusEndpoint(
+	ctx context.Context,
+	request *matchingservice.UpdateNexusEndpointRequest,
+	_ ...grpc.CallOption,
+) (*matchingservice.UpdateNexusEndpointResponse, error) {
+	spec, err := c.nexus.persistenceSpecToAPI(request.GetSpec())
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.nexus.operator.UpdateNexusEndpoint(
+		ctx,
+		&operatorservice.UpdateNexusEndpointRequest{
+			Id:      request.GetId(),
+			Version: request.GetVersion(),
+			Spec:    spec,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	entry, err := c.nexus.apiEndpointToPersistence(ctx, response.GetEndpoint())
+	if err != nil {
+		return nil, err
+	}
+	c.nexus.advanceTableVersion()
+	return &matchingservice.UpdateNexusEndpointResponse{Entry: entry}, nil
+}
+
+func (c *conformanceMatchingClient) DeleteNexusEndpoint(
+	ctx context.Context,
+	request *matchingservice.DeleteNexusEndpointRequest,
+	_ ...grpc.CallOption,
+) (*matchingservice.DeleteNexusEndpointResponse, error) {
+	entries, err := c.nexus.listAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var version int64
+	for _, entry := range entries {
+		if entry.GetId() == request.GetId() {
+			version = entry.GetVersion()
+			break
+		}
+	}
+	if version == 0 {
+		return nil, serviceerror.NewNotFoundf(
+			"error deleting nexus endpoint with ID: %v",
+			request.GetId(),
+		)
+	}
+	_, err = c.nexus.operator.DeleteNexusEndpoint(
+		ctx,
+		&operatorservice.DeleteNexusEndpointRequest{Id: request.GetId(), Version: version},
+	)
+	if err != nil {
+		return nil, err
+	}
+	c.nexus.advanceTableVersion()
+	return &matchingservice.DeleteNexusEndpointResponse{}, nil
+}
+
+func (c *conformanceMatchingClient) ListNexusEndpoints(
+	ctx context.Context,
+	request *matchingservice.ListNexusEndpointsRequest,
+	_ ...grpc.CallOption,
+) (*matchingservice.ListNexusEndpointsResponse, error) {
+	tableVersion, nextPageToken, entries, err := c.nexus.list(
+		ctx,
+		request.GetLastKnownTableVersion(),
+		request.GetNextPageToken(),
+		int(request.GetPageSize()),
+		request.GetWait(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &matchingservice.ListNexusEndpointsResponse{
+		TableVersion:  tableVersion,
+		NextPageToken: nextPageToken,
+		Entries:       entries,
+	}, nil
+}
+
+// conformanceNexusEndpointManager supplies the persistence-level list used only to
+// compare ordering in the endpoint corpus. It shares the matching adapter's real public
+// registry view and table-version fence; direct persistence mutations remain unsupported.
+type conformanceNexusEndpointManager struct {
+	state *conformanceNexusEndpointState
+}
+
+func (m *conformanceNexusEndpointManager) GetName() string { return "tokeira-conformance" }
+
+func (m *conformanceNexusEndpointManager) Close() {}
+
+func (m *conformanceNexusEndpointManager) GetNexusEndpoint(
+	ctx context.Context,
+	request *persistence.GetNexusEndpointRequest,
+) (*persistencespb.NexusEndpointEntry, error) {
+	response, err := m.state.operator.GetNexusEndpoint(
+		ctx,
+		&operatorservice.GetNexusEndpointRequest{Id: request.ID},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return m.state.apiEndpointToPersistence(ctx, response.GetEndpoint())
+}
+
+func (m *conformanceNexusEndpointManager) ListNexusEndpoints(
+	ctx context.Context,
+	request *persistence.ListNexusEndpointsRequest,
+) (*persistence.ListNexusEndpointsResponse, error) {
+	tableVersion, nextPageToken, entries, err := m.state.list(
+		ctx,
+		request.LastKnownTableVersion,
+		request.NextPageToken,
+		request.PageSize,
+		false,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &persistence.ListNexusEndpointsResponse{
+		TableVersion:  tableVersion,
+		NextPageToken: nextPageToken,
+		Entries:       entries,
+	}, nil
+}
+
+func (m *conformanceNexusEndpointManager) CreateOrUpdateNexusEndpoint(
+	context.Context,
+	*persistence.CreateOrUpdateNexusEndpointRequest,
+) (*persistence.CreateOrUpdateNexusEndpointResponse, error) {
+	return nil, errConformanceUnsupported
+}
+
+func (m *conformanceNexusEndpointManager) DeleteNexusEndpoint(
+	context.Context,
+	*persistence.DeleteNexusEndpointRequest,
+) error {
+	return errConformanceUnsupported
 }
 
 func (m *conformanceMetadataManager) GetNamespace(context.Context, *persistence.GetNamespaceRequest) (*persistence.GetNamespaceResponse, error) {

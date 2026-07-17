@@ -51,6 +51,9 @@ type TokeiradProcess struct {
 	// dynamic-config bridge posts OverrideDynamicConfig values to it, and SetFrontendEnv
 	// exports it so the corpus can reach it.
 	ControlAddr string
+	// AuthCallbackURL is served inside the corpus process and lets a
+	// conformance-mode tokeirad invoke namespace-scoped SetOnAuthorize hooks.
+	AuthCallbackURL string
 }
 
 // tokeiradBinEnv names the env var holding the path to a prebuilt `tokeirad`
@@ -101,6 +104,7 @@ func StartTokeirad(t *testing.T) *TokeiradProcess {
 	// delivered via TOKEIRA_CONFORMANCE_CONTROL_ADDR. tokeirad binds and answers here only when
 	// built with the `conformance` feature; the dynamic-config bridge posts overrides to it.
 	controlAddr := freeLoopbackAddr(t)
+	authCallbackURL := "http://" + freeLoopbackAddr(t) + "/authorize"
 
 	// tokeirad reads its frontend bind address from infrastructure.network.grpc_addr and
 	// its metrics bind address from infrastructure.network.metrics_addr. A minimal TOML
@@ -121,7 +125,11 @@ func StartTokeirad(t *testing.T) *TokeiradProcess {
 	// TOKEIRA_CONFORMANCE_CONTROL_ADDR only in a `conformance` build; any other build ignores
 	// it (no control listener), and the dynamic-config bridge then no-ops. os.Environ() is
 	// preserved so other harness env (e.g. wire-coverage) still reaches the child.
-	cmd.Env = append(os.Environ(), tokeiraControlAddrEnv+"="+controlAddr)
+	cmd.Env = append(
+		os.Environ(),
+		tokeiraControlAddrEnv+"="+controlAddr,
+		tokeiraAuthorizationCallbackURLEnv+"="+authCallbackURL,
+	)
 	// Surface tokeirad's own logs through the test log so a failed readiness wait
 	// is debuggable rather than silent.
 	cmd.Stdout = newTestLogWriter(t, "tokeirad stdout")
@@ -131,7 +139,10 @@ func StartTokeirad(t *testing.T) *TokeiradProcess {
 		t.Fatalf("tokeira conformance: start %q: %v", bin, err)
 	}
 
-	return &TokeiradProcess{cmd: cmd, Addr: addr, MetricsAddr: metricsAddr, ControlAddr: controlAddr}
+	return &TokeiradProcess{
+		cmd: cmd, Addr: addr, MetricsAddr: metricsAddr, ControlAddr: controlAddr,
+		AuthCallbackURL: authCallbackURL,
+	}
 }
 
 // WaitReady blocks until `tokeirad`'s frontend answers a trivial, side-effect-free
@@ -229,6 +240,9 @@ func (p *TokeiradProcess) SetFrontendEnv(t *testing.T) {
 	// nothing answers there and the bridge no-ops.
 	if p.ControlAddr != "" {
 		t.Setenv(tokeiraControlAddrEnv, p.ControlAddr)
+	}
+	if p.AuthCallbackURL != "" {
+		t.Setenv(tokeiraAuthorizationCallbackURLEnv, p.AuthCallbackURL)
 	}
 }
 
