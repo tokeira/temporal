@@ -29,6 +29,8 @@ type conformanceAuthorizeRequest struct {
 	APIName           string  `json:"api_name"`
 	Namespace         string  `json:"namespace"`
 	NexusEndpointName *string `json:"nexus_endpoint_name"`
+	AuthToken         string  `json:"auth_token"`
+	ExtraData         string  `json:"extra_data"`
 }
 
 type conformanceAuthorizeResponse struct {
@@ -105,7 +107,22 @@ func handleConformanceAuthorize(writer http.ResponseWriter, request *http.Reques
 	if input.NexusEndpointName != nil {
 		endpointName = *input.NexusEndpointName
 	}
-	result, err := host.Authorize(request.Context(), nil, &authorization.CallTarget{
+	var claims *authorization.Claims
+	if input.AuthToken != "" || input.ExtraData != "" {
+		var err error
+		claims, err = host.GetClaims(&authorization.AuthInfo{
+			AuthToken: input.AuthToken,
+			ExtraData: input.ExtraData,
+		})
+		if err != nil {
+			writer.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(writer).Encode(conformanceAuthorizeResponse{
+				Decision: "unauthenticated",
+			})
+			return
+		}
+	}
+	result, err := host.Authorize(request.Context(), claims, &authorization.CallTarget{
 		APIName:           input.APIName,
 		Namespace:         input.Namespace,
 		NexusEndpointName: endpointName,

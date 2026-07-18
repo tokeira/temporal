@@ -46,6 +46,14 @@ var conformanceSkips = []conformanceSkip{
 			"(docs/conformance/v1.31.0/excluded.md). The HSM sibling remains active.",
 	},
 	{
+		nameContains: "TestNexusApiTestSuiteWithLegacyErrorPaths/TestNexusStartOperation_WithNamespaceAndTaskQueue_SupportsVersioning",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
+		nameContains: "TestNexusApiTestSuiteWithTemporalFailures/TestNexusStartOperation_WithNamespaceAndTaskQueue_SupportsVersioning",
+		reason:       workerVersioningEnabledPathReason,
+	},
+	{
 		nameContains: "TestAdvancedVisibilitySuite/Test_BuildIdIndexedOnCompletion_VersionedWorker",
 		reason:       workerVersioningEnabledPathReason,
 	},

@@ -178,6 +178,19 @@ func TestConformanceSkipRegexp_AdvancedVisibilityWorkerVersioning(t *testing.T) 
 	}
 }
 
+func TestConformanceSkipRegexp_NexusV1Versioning(t *testing.T) {
+	for _, suite := range []string{
+		"TestNexusApiTestSuiteWithLegacyErrorPaths",
+		"TestNexusApiTestSuiteWithTemporalFailures",
+	} {
+		pattern := ConformanceSkipRegexp(suite)
+		name := suite + "/TestNexusStartOperation_WithNamespaceAndTaskQueue_SupportsVersioning"
+		if !matchesSkip(t, pattern, name) {
+			t.Errorf("expected %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
 func TestConformanceSkipRegexp_SizeLimit(t *testing.T) {
 	const suite = "TestSizeLimitFunctionalSuite"
 	pattern := ConformanceSkipRegexp(suite)

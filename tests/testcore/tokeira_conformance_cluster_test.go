@@ -29,11 +29,19 @@ func TestConformanceAuthorizationBridgeRoutesByExactNamespace(t *testing.T) {
 	namespacesA.add("namespace-a")
 	namespacesB := newConformanceNamespaceSet()
 	namespacesB.add("namespace-b")
+	hostA.SetOnGetClaims(func(info *authorization.AuthInfo) (*authorization.Claims, error) {
+		require.Equal(t, "Bearer test", info.AuthToken)
+		require.Equal(t, "extra", info.ExtraData)
+		return &authorization.Claims{Subject: "mapped-subject"}, nil
+	})
 	hostA.SetOnAuthorize(func(
-		context.Context,
-		*authorization.Claims,
-		*authorization.CallTarget,
+		_ context.Context,
+		claims *authorization.Claims,
+		_ *authorization.CallTarget,
 	) (authorization.Result, error) {
+		if claims != nil {
+			return authorization.Result{Decision: authorization.DecisionDeny, Reason: claims.Subject}, nil
+		}
 		return authorization.Result{Decision: authorization.DecisionDeny, Reason: "host-a"}, nil
 	})
 	hostB.SetOnAuthorize(func(
@@ -50,8 +58,9 @@ func TestConformanceAuthorizationBridgeRoutesByExactNamespace(t *testing.T) {
 		unregisterConformanceAuthorizationHost(hostB)
 	})
 
-	call := func(namespace string) (int, conformanceAuthorizeResponse) {
-		body := `{"api_name":"api","namespace":"` + namespace + `"}`
+	call := func(namespace, authToken, extraData string) (int, conformanceAuthorizeResponse) {
+		body := `{"api_name":"api","namespace":"` + namespace +
+			`","auth_token":"` + authToken + `","extra_data":"` + extraData + `"}`
 		request := httptest.NewRequest(http.MethodPost, "/authorize", strings.NewReader(body))
 		response := httptest.NewRecorder()
 		handleConformanceAuthorize(response, request)
@@ -62,24 +71,62 @@ func TestConformanceAuthorizationBridgeRoutesByExactNamespace(t *testing.T) {
 		return response.Code, decoded
 	}
 
-	status, response := call("namespace-a")
+	status, response := call("namespace-a", "", "")
 	require.Equal(t, http.StatusOK, status)
 	require.Equal(t, "deny", response.Decision)
 	require.Equal(t, "host-a", *response.Reason)
-	status, response = call("namespace-b")
+	status, response = call("namespace-a", "Bearer test", "extra")
+	require.Equal(t, http.StatusOK, status)
+	require.Equal(t, "mapped-subject", *response.Reason)
+	status, response = call("namespace-b", "", "")
 	require.Equal(t, http.StatusOK, status)
 	require.Equal(t, "host-b", *response.Reason)
-	status, _ = call("unknown")
+	status, _ = call("unknown", "", "")
 	require.Equal(t, http.StatusNotFound, status)
 
 	unregisterConformanceAuthorizationHost(hostA)
-	status, _ = call("namespace-a")
+	status, _ = call("namespace-a", "", "")
 	require.Equal(t, http.StatusNotFound, status)
 }
 
 type conformanceNexusOperator struct {
 	operatorservice.OperatorServiceClient
 	endpoints []*nexuspb.Endpoint
+	deleted   []string
+}
+
+func (o *conformanceNexusOperator) DeleteNexusEndpoint(
+	_ context.Context,
+	request *operatorservice.DeleteNexusEndpointRequest,
+	_ ...grpc.CallOption,
+) (*operatorservice.DeleteNexusEndpointResponse, error) {
+	o.deleted = append(o.deleted, request.GetId())
+	return &operatorservice.DeleteNexusEndpointResponse{}, nil
+}
+
+func TestCleanupConformanceNexusEndpointsForNamespaceIsExact(t *testing.T) {
+	workerTarget := func(namespace string) *nexuspb.EndpointTarget {
+		return &nexuspb.EndpointTarget{
+			Variant: &nexuspb.EndpointTarget_Worker_{
+				Worker: &nexuspb.EndpointTarget_Worker{
+					Namespace: namespace,
+					TaskQueue: "task-queue",
+				},
+			},
+		}
+	}
+	operator := &conformanceNexusOperator{endpoints: []*nexuspb.Endpoint{
+		{Id: "exact", Version: 1, Spec: &nexuspb.EndpointSpec{Target: workerTarget("namespace-a")}},
+		{Id: "prefix", Version: 1, Spec: &nexuspb.EndpointSpec{Target: workerTarget("namespace-a-sibling")}},
+		{Id: "foreign", Version: 1, Spec: &nexuspb.EndpointSpec{Target: workerTarget("namespace-b")}},
+	}}
+
+	require.NoError(t, cleanupConformanceNexusEndpointsForNamespace(
+		context.Background(),
+		operator,
+		"namespace-a",
+	))
+	require.Equal(t, []string{"exact"}, operator.deleted)
 }
 
 func (o *conformanceNexusOperator) ListNexusEndpoints(

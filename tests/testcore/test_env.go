@@ -195,6 +195,26 @@ func NewEnv(t *testing.T, opts ...TestOption) *TestEnv {
 		sdkWorkerTQ:        RandomizeStr("tq-" + t.Name()),
 	}
 
+	if conformanceFrontendAddr() != "" && options.dedicatedCluster {
+		// A real dedicated cluster owns an isolated Nexus endpoint catalog. Shape-2
+		// deliberately shares Tokeira's one cluster-global catalog, so release only
+		// this leaf's namespace-targeted endpoints before the pooled cluster slot is
+		// handed to a sibling leaf. Tokeira keeps its production global-uniqueness
+		// contract; this restores the isolation supplied by the corpus topology.
+		targetNamespace := ns.String()
+		t.Cleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			if err := cleanupConformanceNexusEndpointsForNamespace(
+				cleanupCtx,
+				env.OperatorClient(),
+				targetNamespace,
+			); err != nil {
+				t.Errorf("Failed to clean up conformance Nexus endpoints: %v", err)
+			}
+		})
+	}
+
 	// Set Nexus callback URL now that we have the cluster's HTTP address. Note that we set
 	// a default for the global config here so callers that rely on this can still use a shared cluster.
 	env.FunctionalTestBase.OverrideDynamicConfig(

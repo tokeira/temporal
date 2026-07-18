@@ -43,17 +43,20 @@ const tokeiraMetricsAddrEnv = "TOKEIRA_CONFORMANCE_METRICS_ADDR"
 // scrape seam without changing any test body or fabricating a sample.
 var tokeiraMetricsCaptureMu sync.Mutex
 
-// tokeiraMetricRename maps a tokeira-native Prometheus counter name to the Temporal metric
-// name the functional corpus reads via snap["<temporal name>"]. Only counters the corpus
-// asserts on are mapped; latency histograms are intentionally omitted (no functional test
-// asserts them, and faithful Prometheus-bucket -> capture replay is out of scope).
+// tokeiraMetricRename maps a tokeira-native monotonic Prometheus sample to the Temporal
+// metric name the functional corpus reads via snap["<temporal name>"]. Counters map
+// directly. For nexus_latency, the histogram's exact `_count` delta preserves the number
+// of genuine observations and their labels; bucket/value replay remains unnecessary because
+// this corpus asserts observation presence and dimensions, not a latency value.
 var tokeiraMetricRename = map[string]string{
 	"tokeira_runtime_nexus_outbound_requests_total":                 "nexus_outbound_requests",
 	"tokeira_edge_nexus_completion_requests_total":                  "nexus_completion_requests",
 	"tokeira_edge_nexus_completion_request_preprocess_errors_total": "nexus_completion_request_preprocess_errors",
 	"tokeira_edge_nexus_task_requests_total":                        "nexus_task_requests",
 	"tokeira_edge_nexus_requests_total":                             "nexus_requests",
+	"tokeira_edge_nexus_latency_seconds_count":                      "nexus_latency",
 	"tokeira_edge_nexus_request_preprocess_errors_total":            "nexus_request_preprocess_errors",
+	"tokeira_edge_service_requests_total":                           "service_requests",
 	// Speculative workflow task outcome counters (spec speculative-wft M.1/M.2).
 	// commits/rollbacks are read count-only; the timer-task counters carry an
 	// "operation" label = TimerActiveTaskSpeculativeWorkflowTaskTimeout that the

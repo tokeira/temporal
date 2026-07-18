@@ -214,6 +214,58 @@ func newConformanceCluster(
 	return &TestCluster{testBase: testBase, host: host}, nil
 }
 
+// cleanupConformanceNexusEndpointsForNamespace restores per-TestEnv endpoint-catalog
+// isolation before a pooled dedicated cluster is reused by a sibling corpus leaf.
+func cleanupConformanceNexusEndpointsForNamespace(
+	ctx context.Context,
+	operatorClient operatorservice.OperatorServiceClient,
+	targetNamespace string,
+) error {
+	if operatorClient == nil {
+		return nil
+	}
+	var endpoints []*nexuspb.Endpoint
+	var pageToken []byte
+	for {
+		response, err := operatorClient.ListNexusEndpoints(
+			ctx,
+			&operatorservice.ListNexusEndpointsRequest{
+				PageSize:      1000,
+				NextPageToken: pageToken,
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("tokeira conformance: list Nexus endpoints during teardown: %w", err)
+		}
+		endpoints = append(endpoints, response.GetEndpoints()...)
+		if len(response.GetNextPageToken()) == 0 {
+			break
+		}
+		pageToken = response.GetNextPageToken()
+	}
+	for _, endpoint := range endpoints {
+		worker := endpoint.GetSpec().GetTarget().GetWorker()
+		if worker == nil || worker.GetNamespace() != targetNamespace {
+			continue
+		}
+		_, err := operatorClient.DeleteNexusEndpoint(
+			ctx,
+			&operatorservice.DeleteNexusEndpointRequest{
+				Id:      endpoint.GetId(),
+				Version: endpoint.GetVersion(),
+			},
+		)
+		if err != nil && status.Code(err) != codes.NotFound {
+			return fmt.Errorf(
+				"tokeira conformance: delete Nexus endpoint %q during teardown: %w",
+				endpoint.GetId(),
+				err,
+			)
+		}
+	}
+	return nil
+}
+
 // conformanceMetadataManager forwards namespace registration to `tokeirad`'s frontend so
 // FunctionalTestBase.RegisterNamespace runs unmodified over the wire. Only CreateNamespace
 // is implemented; the rest of the MetadataManager surface returns errConformanceUnsupported.
