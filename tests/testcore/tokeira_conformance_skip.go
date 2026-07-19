@@ -304,32 +304,6 @@ var conformanceSkips = []conformanceSkip{
 			"dynamic-config injection over the wire (established OverrideDynamicConfig-class skip)",
 	},
 	{
-		nameContains: "TestWorkerDeploymentSuite/TestDeploymentVersionLimits",
-		reason: "requires OverrideDynamicConfig(MatchingMaxVersionsInDeployment=1); " +
-			"tokeira does not support dynamic-config injection over the wire and its " +
-			"default already matches v1.31.0 (100)",
-	},
-	{
-		nameContains: "TestWorkerDeploymentSuite/TestDeleteVersion_ServerDeleteMaxVersionsReached",
-		reason: "requires OverrideDynamicConfig(MatchingMaxVersionsInDeployment=1); " +
-			"tokeira does not support dynamic-config injection over the wire and its " +
-			"default already matches v1.31.0 (100)",
-	},
-	{
-		nameContains: "TestWorkerDeploymentSuite/TestSetRampingVersion_AfterDrained",
-		reason: "depends on suite-level OverrideDynamicConfig of " +
-			"VersionDrainageStatusRefreshInterval / VisibilityGracePeriod (defaults 3m) to " +
-			"drain a demoted version within the 10s assertion window; tokeira does not " +
-			"support dynamic-config injection over the wire",
-	},
-	{
-		nameContains: "TestWorkerDeploymentSuite/TestDrainRollbackedVersion",
-		reason: "depends on suite-level OverrideDynamicConfig of " +
-			"VersionDrainageStatusRefreshInterval / VisibilityGracePeriod (defaults 3m) to " +
-			"drive Draining→Drained within the assertion window; tokeira does not " +
-			"support dynamic-config injection over the wire",
-	},
-	{
 		nameContains: "TestWorkerDeploymentSuite/TestForceCAN_WithOverrideState",
 		reason: "injects the server's internal deployment entity-workflow state " +
 			"(deploymentspb.ForceCANDeploymentSignalArgs.OverrideState, a WorkerDeploymentLocalState) " +

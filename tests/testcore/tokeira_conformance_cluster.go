@@ -200,6 +200,15 @@ func newConformanceCluster(
 	}
 	registerConformanceAuthorizationHost(host, namespaces)
 
+	// The standard onebox constructor applies `WithDynamicConfigOverrides` while
+	// assembling its TemporalImpl. Shape-2 deliberately bypasses that constructor,
+	// so deliver the suite-scoped values here or SetupSuite overrides silently remain
+	// confined to the unused in-process config client. Cleanup is tied to the suite's
+	// `testing.T`, preserving the same lifetime as the ordinary onebox path.
+	for key, value := range clusterConfig.DynamicConfigOverrides {
+		host.overrideDynamicConfig(t, key, value)
+	}
+
 	// Tier-2 metrics bridge: when the harness exported tokeirad's /metrics address, install
 	// a CaptureMetricsHandler backed by a scrape-and-diff source so metric-asserting corpus
 	// tests (e.g. the Nexus outbound-request tests) observe tokeira's genuine emissions
