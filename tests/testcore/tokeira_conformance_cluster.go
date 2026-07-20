@@ -46,6 +46,7 @@ import (
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/server/api/adminservice/v1"
 	clockspb "go.temporal.io/server/api/clock/v1"
+	deploymentspb "go.temporal.io/server/api/deployment/v1"
 	"go.temporal.io/server/api/matchingservice/v1"
 	persistencespb "go.temporal.io/server/api/persistence/v1"
 	"go.temporal.io/server/common/cluster"
@@ -481,6 +482,105 @@ func (c *conformanceMatchingClient) CheckTaskQueueVersionMembership(
 		}
 	}
 	return &matchingservice.CheckTaskQueueVersionMembershipResponse{}, nil
+}
+
+func (c *conformanceMatchingClient) GetTaskQueueUserData(
+	ctx context.Context,
+	request *matchingservice.GetTaskQueueUserDataRequest,
+	_ ...grpc.CallOption,
+) (*matchingservice.GetTaskQueueUserDataResponse, error) {
+	namespace, ok := c.namespaces.nameForID(request.GetNamespaceId())
+	if !ok {
+		return nil, fmt.Errorf(
+			"tokeira conformance: namespace id %q is not registered in this cluster",
+			request.GetNamespaceId(),
+		)
+	}
+
+	deploymentData := &persistencespb.DeploymentData{
+		DeploymentsData: make(map[string]*persistencespb.WorkerDeploymentData),
+	}
+	var pageToken []byte
+	for {
+		page, err := c.frontend.ListWorkerDeployments(
+			ctx,
+			&workflowservice.ListWorkerDeploymentsRequest{
+				Namespace:     namespace,
+				PageSize:      100,
+				NextPageToken: pageToken,
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		for _, summary := range page.GetWorkerDeployments() {
+			deployment, err := c.frontend.DescribeWorkerDeployment(
+				ctx,
+				&workflowservice.DescribeWorkerDeploymentRequest{
+					Namespace:      namespace,
+					DeploymentName: summary.GetName(),
+				},
+			)
+			if err != nil {
+				if status.Code(err) == codes.NotFound {
+					continue
+				}
+				return nil, err
+			}
+			info := deployment.GetWorkerDeploymentInfo()
+			for _, versionSummary := range info.GetVersionSummaries() {
+				version := versionSummary.GetDeploymentVersion()
+				if version == nil {
+					continue
+				}
+				versionInfo, err := c.frontend.DescribeWorkerDeploymentVersion(
+					ctx,
+					&workflowservice.DescribeWorkerDeploymentVersionRequest{
+						Namespace:         namespace,
+						DeploymentVersion: version,
+					},
+				)
+				if err != nil {
+					if status.Code(err) == codes.NotFound {
+						continue
+					}
+					return nil, err
+				}
+				for _, taskQueue := range versionInfo.GetVersionTaskQueues() {
+					if taskQueue.GetName() != request.GetTaskQueue() ||
+						taskQueue.GetType() != request.GetTaskQueueType() {
+						continue
+					}
+					entry := deploymentData.DeploymentsData[version.GetDeploymentName()]
+					if entry == nil {
+						entry = &persistencespb.WorkerDeploymentData{
+							RoutingConfig: info.GetRoutingConfig(),
+							Versions:      make(map[string]*deploymentspb.WorkerDeploymentVersionData),
+						}
+						deploymentData.DeploymentsData[version.GetDeploymentName()] = entry
+					}
+					// The leaf uses this internal view only to observe public membership. A
+					// live public Version corresponds to revision zero and deleted=false,
+					// which are the v1.31.0 defaults after poll-driven recreation.
+					entry.Versions[version.GetBuildId()] = &deploymentspb.WorkerDeploymentVersionData{}
+				}
+			}
+		}
+		pageToken = page.GetNextPageToken()
+		if len(pageToken) == 0 {
+			break
+		}
+	}
+
+	return &matchingservice.GetTaskQueueUserDataResponse{
+		UserData: &persistencespb.VersionedTaskQueueUserData{
+			Data: &persistencespb.TaskQueueUserData{
+				PerType: map[int32]*persistencespb.TaskQueueTypeUserData{
+					int32(request.GetTaskQueueType()): {DeploymentData: deploymentData},
+				},
+			},
+		},
+	}, nil
 }
 
 // conformanceNexusEndpointState maps the corpus's internal Matching/Persistence endpoint views onto

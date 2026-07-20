@@ -304,7 +304,7 @@ var conformanceSkips = []conformanceSkip{
 			"dynamic-config injection over the wire (established OverrideDynamicConfig-class skip)",
 	},
 	{
-		nameContains: "TestWorkerDeploymentSuite/TestForceCAN_WithOverrideState",
+		nameContains: "TestDeploymentVersionSuite/TestForceCAN_WithOverrideState",
 		reason: "injects the server's internal deployment entity-workflow state " +
 			"(deploymentspb.ForceCANDeploymentSignalArgs.OverrideState, a WorkerDeploymentLocalState) " +
 			"via signal — an internal-surface representation tokeira does not model, not a " +

@@ -139,8 +139,26 @@ func (o *conformanceNexusOperator) ListNexusEndpoints(
 
 type conformanceMatchingFrontend struct {
 	workflowservice.WorkflowServiceClient
-	response *workflowservice.DescribeWorkerDeploymentVersionResponse
-	request  *workflowservice.DescribeWorkerDeploymentVersionRequest
+	response                   *workflowservice.DescribeWorkerDeploymentVersionResponse
+	request                    *workflowservice.DescribeWorkerDeploymentVersionRequest
+	listResponse               *workflowservice.ListWorkerDeploymentsResponse
+	describeDeploymentResponse *workflowservice.DescribeWorkerDeploymentResponse
+}
+
+func (f *conformanceMatchingFrontend) ListWorkerDeployments(
+	_ context.Context,
+	_ *workflowservice.ListWorkerDeploymentsRequest,
+	_ ...grpc.CallOption,
+) (*workflowservice.ListWorkerDeploymentsResponse, error) {
+	return f.listResponse, nil
+}
+
+func (f *conformanceMatchingFrontend) DescribeWorkerDeployment(
+	_ context.Context,
+	_ *workflowservice.DescribeWorkerDeploymentRequest,
+	_ ...grpc.CallOption,
+) (*workflowservice.DescribeWorkerDeploymentResponse, error) {
+	return f.describeDeploymentResponse, nil
 }
 
 func (f *conformanceMatchingFrontend) DescribeWorkerDeploymentVersion(
@@ -200,6 +218,51 @@ func TestConformanceMatchingClientRejectsUnknownNamespaceID(t *testing.T) {
 	)
 	require.ErrorContains(t, err, "namespace id \"unknown\" is not registered")
 	require.Nil(t, response)
+}
+
+func TestConformanceMatchingClientProjectsTaskQueueUserDataFromPublicDeploymentAPIs(t *testing.T) {
+	namespaces := newConformanceNamespaceSet()
+	namespaces.addID("namespace-id", "namespace-name")
+	version := &deploymentpb.WorkerDeploymentVersion{
+		DeploymentName: "deployment",
+		BuildId:        "build-id",
+	}
+	frontend := &conformanceMatchingFrontend{
+		listResponse: &workflowservice.ListWorkerDeploymentsResponse{
+			WorkerDeployments: []*workflowservice.ListWorkerDeploymentsResponse_WorkerDeploymentSummary{
+				{Name: "deployment"},
+			},
+		},
+		describeDeploymentResponse: &workflowservice.DescribeWorkerDeploymentResponse{
+			WorkerDeploymentInfo: &deploymentpb.WorkerDeploymentInfo{
+				Name: "deployment",
+				VersionSummaries: []*deploymentpb.WorkerDeploymentInfo_WorkerDeploymentVersionSummary{
+					{DeploymentVersion: version},
+				},
+			},
+		},
+		response: &workflowservice.DescribeWorkerDeploymentVersionResponse{
+			VersionTaskQueues: []*workflowservice.DescribeWorkerDeploymentVersionResponse_VersionTaskQueue{
+				{Name: "workflow-queue", Type: enumspb.TASK_QUEUE_TYPE_WORKFLOW},
+			},
+		},
+	}
+	client := &conformanceMatchingClient{frontend: frontend, namespaces: namespaces}
+
+	response, err := client.GetTaskQueueUserData(
+		context.Background(),
+		&matchingservice.GetTaskQueueUserDataRequest{
+			NamespaceId:   "namespace-id",
+			TaskQueue:     "workflow-queue",
+			TaskQueueType: enumspb.TASK_QUEUE_TYPE_WORKFLOW,
+		},
+	)
+	require.NoError(t, err)
+	versionData := response.GetUserData().GetData().GetPerType()[int32(enumspb.TASK_QUEUE_TYPE_WORKFLOW)].
+		GetDeploymentData().GetDeploymentsData()["deployment"].GetVersions()["build-id"]
+	require.NotNil(t, versionData)
+	require.Zero(t, versionData.GetRevisionNumber())
+	require.False(t, versionData.GetDeleted())
 }
 
 func TestConformanceNexusStatePreservesInternalListContract(t *testing.T) {
