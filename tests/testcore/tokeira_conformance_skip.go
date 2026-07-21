@@ -37,7 +37,153 @@ const workerVersioningEnabledPathReason = "requires the suite's non-default " +
 	"targets the stock-default PERMISSION_DENIED behavior and excludes deprecated V1/V2 " +
 	"version sets, rules, reachability, and scavenging semantics."
 
+const versioning3InternalRoutingMutationReason = "drives the scenario by calling the internal " +
+	"MatchingService SyncDeploymentUserData/GetTaskQueueUserData path to install or roll back exact " +
+	"per-task-queue routing revisions (tests/versioning_3_test.go @ v1.31.0). That topology-control " +
+	"surface is not a public Temporal API and has no equivalent in Tokeira's runtime-owned Worker " +
+	"Deployment registry; the externally observable V3 routing paths remain active."
+
 var conformanceSkips = []conformanceSkip{
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestUnpinnedTask_OldDeployment",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestTransitionFromWft_Sticky",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestTransitionFromWft_NoSticky",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestTransitionFromWft_Sticky_ToUnversioned",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestTransitionFromWft_NoSticky_ToUnversioned",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestDoubleTransition",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestDoubleTransition_WithSignal",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestDoubleTransitionFromUnversioned",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestDoubleTransitionFromUnversioned_WithSignal",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestEagerActivity",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestTransitionFromActivity_Sticky",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestTransitionFromActivity_NoSticky",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestIndependentVersionedActivity_Pinned",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestIndependentVersionedActivity_Unpinned",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestIndependentUnversionedActivity_Pinned",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestIndependentUnversionedActivity_Unpinned",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestChildWorkflowInheritance_PinnedParent",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestChildWorkflowInheritance_ParentPinnedByOverride",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestChildWorkflowInheritance_CrossTQ_Inherit",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestDescribeTaskQueueVersioningInfo",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestSyncDeploymentUserDataWithRoutingConfig_Update",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestAutoUpgradeWorkflows_NoBouncingBetweenVersions",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestWorkflowTQLags_DependentActivityStartsTransition",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestActivityTQLags_DependentActivityCompletesOnTheNewVersion",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestChildStartsWithParentRevision_SameTQ_TQLags",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestContinueAsNewOfAutoUpgradeWorkflow_RevisionNumberMechanics",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestWorkflowRetry_AutoUpgrade_NoBounceBack",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestWorkflowRetry_AutoUpgrade_AfterCAN_NoBounceBack",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestWorkflowRetry_AutoUpgrade_ChildNoBounceBack",
+		reason:       versioning3InternalRoutingMutationReason,
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestNexusTask_StaysOnCurrentDeployment",
+		reason: "dispatches the task through internal MatchingService.DispatchNexusTask and mutates " +
+			"Nexus queue routing through SyncDeploymentUserData (tests/versioning_3_test.go @ " +
+			"v1.31.0); neither internal service RPC is part of the public compatibility surface.",
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestCheckTaskQueueVersionMembership",
+		reason: "directly tests internal MatchingService.CheckTaskQueueVersionMembership " +
+			"(tests/versioning_3_test.go @ v1.31.0), an internal history-to-matching validation RPC " +
+			"rather than a public WorkflowService contract.",
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestMaxVersionsInTaskQueue",
+		reason: "injects versions with internal MatchingService.SyncDeploymentUserData and asserts " +
+			"the matching.maxDeployments internal cache limit (tests/versioning_3_test.go and " +
+			"common/dynamicconfig/constants.go @ v1.31.0); neither surface is public.",
+	},
+	{
+		nameContains: "TestVersioning3FunctionalSuite/TestVersionedQueueUnload",
+		reason: "asserts internal Matching task-queue partition unload/reload and repeatedly reads " +
+			"GetTaskQueueUserData (tests/versioning_3_test.go @ v1.31.0); Tokeira has no matching " +
+			"partition/cache lifecycle and exposes no public equivalent.",
+	},
 	{
 		nameContains: "TestCallbacksSuiteCHASM",
 		reason: "runs the callbacks corpus with EnableChasm and EnableCHASMCallbacks enabled " +

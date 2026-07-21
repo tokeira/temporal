@@ -10,14 +10,18 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	commonpb "go.temporal.io/api/common/v1"
 	deploymentpb "go.temporal.io/api/deployment/v1"
 	enumspb "go.temporal.io/api/enums/v1"
 	nexuspb "go.temporal.io/api/nexus/v1"
 	"go.temporal.io/api/operatorservice/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/api/workflowservice/v1"
+	"go.temporal.io/server/api/adminservice/v1"
 	deploymentspb "go.temporal.io/server/api/deployment/v1"
+	"go.temporal.io/server/api/historyservice/v1"
 	"go.temporal.io/server/api/matchingservice/v1"
+	persistencespb "go.temporal.io/server/api/persistence/v1"
 	"go.temporal.io/server/common/authorization"
 	"google.golang.org/grpc"
 )
@@ -242,6 +246,9 @@ func TestConformanceMatchingClientProjectsTaskQueueUserDataFromPublicDeploymentA
 			},
 		},
 		response: &workflowservice.DescribeWorkerDeploymentVersionResponse{
+			WorkerDeploymentVersionInfo: &deploymentpb.WorkerDeploymentVersionInfo{
+				Status: enumspb.WORKER_DEPLOYMENT_VERSION_STATUS_CURRENT,
+			},
 			VersionTaskQueues: []*workflowservice.DescribeWorkerDeploymentVersionResponse_VersionTaskQueue{
 				{Name: "workflow-queue", Type: enumspb.TASK_QUEUE_TYPE_WORKFLOW},
 			},
@@ -253,7 +260,7 @@ func TestConformanceMatchingClientProjectsTaskQueueUserDataFromPublicDeploymentA
 		context.Background(),
 		&matchingservice.GetTaskQueueUserDataRequest{
 			NamespaceId:   "namespace-id",
-			TaskQueue:     "workflow-queue",
+			TaskQueue:     "/_sys/workflow-queue/3",
 			TaskQueueType: enumspb.TASK_QUEUE_TYPE_WORKFLOW,
 		},
 	)
@@ -263,6 +270,51 @@ func TestConformanceMatchingClientProjectsTaskQueueUserDataFromPublicDeploymentA
 	require.NotNil(t, versionData)
 	require.Zero(t, versionData.GetRevisionNumber())
 	require.False(t, versionData.GetDeleted())
+	require.Equal(t, enumspb.WORKER_DEPLOYMENT_VERSION_STATUS_CURRENT, versionData.GetStatus())
+}
+
+type conformanceHistoryAdmin struct {
+	adminservice.AdminServiceClient
+	request  *adminservice.DescribeMutableStateRequest
+	response *adminservice.DescribeMutableStateResponse
+}
+
+func (a *conformanceHistoryAdmin) DescribeMutableState(
+	_ context.Context,
+	request *adminservice.DescribeMutableStateRequest,
+	_ ...grpc.CallOption,
+) (*adminservice.DescribeMutableStateResponse, error) {
+	a.request = request
+	return a.response, nil
+}
+
+func TestConformanceHistoryClientProjectsStickyQueueFromAdminService(t *testing.T) {
+	namespaces := newConformanceNamespaceSet()
+	namespaces.addID("namespace-id", "namespace-name")
+	execution := &commonpb.WorkflowExecution{WorkflowId: "workflow-id", RunId: "run-id"}
+	admin := &conformanceHistoryAdmin{
+		response: &adminservice.DescribeMutableStateResponse{
+			DatabaseMutableState: &persistencespb.WorkflowMutableState{
+				ExecutionInfo: &persistencespb.WorkflowExecutionInfo{
+					StickyTaskQueue: "sticky-queue",
+				},
+			},
+		},
+	}
+	client := &conformanceHistoryClient{admin: admin, namespaces: namespaces}
+
+	response, err := client.GetMutableState(
+		context.Background(),
+		&historyservice.GetMutableStateRequest{
+			NamespaceId: "namespace-id",
+			Execution:   execution,
+		},
+	)
+	require.NoError(t, err)
+	require.Equal(t, "namespace-name", admin.request.GetNamespace())
+	require.Equal(t, execution, admin.request.GetExecution())
+	require.Equal(t, "sticky-queue", response.GetStickyTaskQueue().GetName())
+	require.True(t, response.GetIsStickyTaskQueueEnabled())
 }
 
 func TestConformanceNexusStatePreservesInternalListContract(t *testing.T) {

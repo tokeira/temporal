@@ -43,10 +43,12 @@ import (
 	nexuspb "go.temporal.io/api/nexus/v1"
 	"go.temporal.io/api/operatorservice/v1"
 	"go.temporal.io/api/serviceerror"
+	taskqueuepb "go.temporal.io/api/taskqueue/v1"
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/server/api/adminservice/v1"
 	clockspb "go.temporal.io/server/api/clock/v1"
 	deploymentspb "go.temporal.io/server/api/deployment/v1"
+	"go.temporal.io/server/api/historyservice/v1"
 	"go.temporal.io/server/api/matchingservice/v1"
 	persistencespb "go.temporal.io/server/api/persistence/v1"
 	"go.temporal.io/server/common/cluster"
@@ -59,6 +61,7 @@ import (
 	"go.temporal.io/server/common/primitives"
 	"go.temporal.io/server/common/testing/grpcinject"
 	"go.temporal.io/server/common/testing/testhooks"
+	"go.temporal.io/server/common/tqid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -141,6 +144,7 @@ func newConformanceCluster(
 	}
 	frontendClient := workflowservice.NewWorkflowServiceClient(conn)
 	operatorClient := operatorservice.NewOperatorServiceClient(conn)
+	adminClient := adminservice.NewAdminServiceClient(conn)
 
 	clusterMetadataConfig := cluster.NewTestClusterMetadataConfig(
 		clusterConfig.ClusterMetadata.EnableGlobalNamespace,
@@ -176,9 +180,13 @@ func newConformanceCluster(
 			namespaces: namespaces,
 			nexus:      nexusEndpoints,
 		},
+		historyClient: &conformanceHistoryClient{
+			admin:      adminClient,
+			namespaces: namespaces,
+		},
 		// tokeirad serves a minimal AdminService (DescribeMutableState) on the same
 		// port; the reset suite reads a run's ResetRunId/status through it.
-		adminClient:           adminservice.NewAdminServiceClient(conn),
+		adminClient:           adminClient,
 		clusterMetadataConfig: clusterMetadataConfig,
 		dcClient:              dynamicconfig.NewMemoryClient(),
 		// SetupTest/TearDownTest call host.grpcClientInterceptor.Set(...) unconditionally to
@@ -442,6 +450,48 @@ type conformanceMatchingClient struct {
 	nexus      *conformanceNexusEndpointState
 }
 
+// conformanceHistoryClient projects the one read-only HistoryService observation used by
+// the V3 corpus through tokeirad's minimal AdminService. The adapter exposes the current
+// sticky queue only; every other HistoryService method remains unavailable through the
+// embedded nil generated client. This preserves the unmodified corpus without inventing
+// a Temporal history-service topology inside Tokeira.
+type conformanceHistoryClient struct {
+	historyservice.HistoryServiceClient
+	admin      adminservice.AdminServiceClient
+	namespaces *conformanceNamespaceSet
+}
+
+func (c *conformanceHistoryClient) GetMutableState(
+	ctx context.Context,
+	request *historyservice.GetMutableStateRequest,
+	_ ...grpc.CallOption,
+) (*historyservice.GetMutableStateResponse, error) {
+	namespace, ok := c.namespaces.nameForID(request.GetNamespaceId())
+	if !ok {
+		return nil, status.Errorf(
+			codes.NotFound,
+			"tokeira conformance: namespace id %q is not registered",
+			request.GetNamespaceId(),
+		)
+	}
+	response, err := c.admin.DescribeMutableState(
+		ctx,
+		&adminservice.DescribeMutableStateRequest{
+			Namespace: namespace,
+			Execution: request.GetExecution(),
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	stickyName := response.GetDatabaseMutableState().GetExecutionInfo().GetStickyTaskQueue()
+	return &historyservice.GetMutableStateResponse{
+		Execution:                request.GetExecution(),
+		StickyTaskQueue:          &taskqueuepb.TaskQueue{Name: stickyName},
+		IsStickyTaskQueueEnabled: stickyName != "",
+	}, nil
+}
+
 func (c *conformanceMatchingClient) CheckTaskQueueVersionMembership(
 	ctx context.Context,
 	request *matchingservice.CheckTaskQueueVersionMembershipRequest,
@@ -496,6 +546,15 @@ func (c *conformanceMatchingClient) GetTaskQueueUserData(
 			request.GetNamespaceId(),
 		)
 	}
+	partition, err := tqid.NormalPartitionFromRpcName(
+		request.GetTaskQueue(),
+		request.GetNamespaceId(),
+		request.GetTaskQueueType(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	taskQueueFamily := partition.TaskQueue().Name()
 
 	deploymentData := &persistencespb.DeploymentData{
 		DeploymentsData: make(map[string]*persistencespb.WorkerDeploymentData),
@@ -547,7 +606,7 @@ func (c *conformanceMatchingClient) GetTaskQueueUserData(
 					return nil, err
 				}
 				for _, taskQueue := range versionInfo.GetVersionTaskQueues() {
-					if taskQueue.GetName() != request.GetTaskQueue() ||
+					if taskQueue.GetName() != taskQueueFamily ||
 						taskQueue.GetType() != request.GetTaskQueueType() {
 						continue
 					}
@@ -562,7 +621,9 @@ func (c *conformanceMatchingClient) GetTaskQueueUserData(
 					// The leaf uses this internal view only to observe public membership. A
 					// live public Version corresponds to revision zero and deleted=false,
 					// which are the v1.31.0 defaults after poll-driven recreation.
-					entry.Versions[version.GetBuildId()] = &deploymentspb.WorkerDeploymentVersionData{}
+					entry.Versions[version.GetBuildId()] = &deploymentspb.WorkerDeploymentVersionData{
+						Status: versionInfo.GetWorkerDeploymentVersionInfo().GetStatus(),
+					}
 				}
 			}
 		}
