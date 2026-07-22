@@ -21,16 +21,18 @@ import (
 
 	"github.com/nexus-rpc/sdk-go/nexus"
 	"go.temporal.io/server/common/authorization"
+	"google.golang.org/grpc/metadata"
 )
 
 const tokeiraAuthorizationCallbackURLEnv = "TOKEIRA_CONFORMANCE_AUTH_CALLBACK_URL"
 
 type conformanceAuthorizeRequest struct {
-	APIName           string  `json:"api_name"`
-	Namespace         string  `json:"namespace"`
-	NexusEndpointName *string `json:"nexus_endpoint_name"`
-	AuthToken         string  `json:"auth_token"`
-	ExtraData         string  `json:"extra_data"`
+	APIName           string              `json:"api_name"`
+	Namespace         string              `json:"namespace"`
+	NexusEndpointName *string             `json:"nexus_endpoint_name"`
+	AuthToken         string              `json:"auth_token"`
+	ExtraData         string              `json:"extra_data"`
+	Metadata          map[string][]string `json:"metadata"`
 }
 
 type conformanceAuthorizeResponse struct {
@@ -122,7 +124,8 @@ func handleConformanceAuthorize(writer http.ResponseWriter, request *http.Reques
 			return
 		}
 	}
-	result, err := host.Authorize(request.Context(), claims, &authorization.CallTarget{
+	ctx := metadata.NewIncomingContext(request.Context(), metadata.MD(input.Metadata))
+	result, err := host.Authorize(ctx, claims, &authorization.CallTarget{
 		APIName:           input.APIName,
 		Namespace:         input.Namespace,
 		NexusEndpointName: endpointName,

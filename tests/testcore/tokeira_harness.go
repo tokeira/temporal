@@ -113,7 +113,8 @@ func StartTokeirad(t *testing.T) *TokeiradProcess {
 	// suite wants.
 	cfgPath := filepath.Join(t.TempDir(), "tokeirad-conformance.toml")
 	cfg := fmt.Sprintf(
-		"[infrastructure.network]\ngrpc_addr = %q\nmetrics_addr = %q\n",
+		"[infrastructure.network]\ngrpc_addr = %q\nmetrics_addr = %q\n\n"+
+			"[policy.http_api]\nadditional_forwarded_headers = [\"this-header-forwarded\", \"this-header-prefix-forwarded-*\"]\n",
 		addr, metricsAddr,
 	)
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {

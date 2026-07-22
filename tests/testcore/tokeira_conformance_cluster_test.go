@@ -24,6 +24,7 @@ import (
 	persistencespb "go.temporal.io/server/api/persistence/v1"
 	"go.temporal.io/server/common/authorization"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 func TestConformanceAuthorizationBridgeRoutesByExactNamespace(t *testing.T) {
@@ -39,10 +40,13 @@ func TestConformanceAuthorizationBridgeRoutesByExactNamespace(t *testing.T) {
 		return &authorization.Claims{Subject: "mapped-subject"}, nil
 	})
 	hostA.SetOnAuthorize(func(
-		_ context.Context,
+		ctx context.Context,
 		claims *authorization.Claims,
 		_ *authorization.CallTarget,
 	) (authorization.Result, error) {
+		md, ok := metadata.FromIncomingContext(ctx)
+		require.True(t, ok)
+		require.Equal(t, []string{"forwarded-value"}, md.Get("this-header-forwarded"))
 		if claims != nil {
 			return authorization.Result{Decision: authorization.DecisionDeny, Reason: claims.Subject}, nil
 		}
@@ -64,7 +68,8 @@ func TestConformanceAuthorizationBridgeRoutesByExactNamespace(t *testing.T) {
 
 	call := func(namespace, authToken, extraData string) (int, conformanceAuthorizeResponse) {
 		body := `{"api_name":"api","namespace":"` + namespace +
-			`","auth_token":"` + authToken + `","extra_data":"` + extraData + `"}`
+			`","auth_token":"` + authToken + `","extra_data":"` + extraData +
+			`","metadata":{"this-header-forwarded":["forwarded-value"]}}`
 		request := httptest.NewRequest(http.MethodPost, "/authorize", strings.NewReader(body))
 		response := httptest.NewRecorder()
 		handleConformanceAuthorize(response, request)

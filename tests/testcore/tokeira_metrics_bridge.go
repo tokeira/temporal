@@ -57,6 +57,7 @@ var tokeiraMetricRename = map[string]string{
 	"tokeira_edge_nexus_latency_seconds_count":                      "nexus_latency",
 	"tokeira_edge_nexus_request_preprocess_errors_total":            "nexus_request_preprocess_errors",
 	"tokeira_edge_service_requests_total":                           "service_requests",
+	"tokeira_edge_http_service_requests_total":                      "http_service_requests",
 	// Speculative workflow task outcome counters (spec speculative-wft M.1/M.2).
 	// commits/rollbacks are read count-only; the timer-task counters carry an
 	// "operation" label = TimerActiveTaskSpeculativeWorkflowTaskTimeout that the
