@@ -39,6 +39,7 @@ import (
 	"sync"
 	"testing"
 
+	commonpb "go.temporal.io/api/common/v1"
 	deploymentpb "go.temporal.io/api/deployment/v1"
 	nexuspb "go.temporal.io/api/nexus/v1"
 	"go.temporal.io/api/operatorservice/v1"
@@ -175,6 +176,10 @@ func newConformanceCluster(
 		logger:         logger,
 		frontendClient: frontendClient,
 		operatorClient: operatorClient,
+		executionManager: &conformanceExecutionManager{
+			admin:      adminClient,
+			namespaces: namespaces,
+		},
 		matchingClient: &conformanceMatchingClient{
 			frontend:   frontendClient,
 			namespaces: namespaces,
@@ -209,11 +214,23 @@ func newConformanceCluster(
 	}
 	registerConformanceAuthorizationHost(host, namespaces)
 
-	// The standard onebox constructor applies `WithDynamicConfigOverrides` while
-	// assembling its TemporalImpl. Shape-2 deliberately bypasses that constructor,
-	// so deliver the suite-scoped values here or SetupSuite overrides silently remain
-	// confined to the unused in-process config client. Cleanup is tied to the suite's
-	// `testing.T`, preserving the same lifetime as the ordinary onebox path.
+	// The standard onebox constructor applies the corpus-wide ClientSuiteLimit
+	// defaults while assembling its TemporalImpl. Shape-2 bypasses that
+	// constructor, so deliver the four pending-command limits that the external
+	// server actually supports. Forwarding every onebox default would only
+	// generate unsupported-key noise for unrelated in-process service knobs.
+	clientSuiteLimitKeys := []dynamicconfig.Key{
+		dynamicconfig.NumPendingChildExecutionsLimitError.Key(),
+		dynamicconfig.NumPendingActivitiesLimitError.Key(),
+		dynamicconfig.NumPendingCancelRequestsLimitError.Key(),
+		dynamicconfig.NumPendingSignalsLimitError.Key(),
+	}
+	for _, key := range clientSuiteLimitKeys {
+		host.overrideDynamicConfig(t, key, dynamicConfigOverrides[key])
+	}
+	// Suite-scoped overrides remain independent of those corpus-wide defaults.
+	// Cleanup is tied to the suite's testing.T, preserving the ordinary onebox
+	// lifetime.
 	for key, value := range clusterConfig.DynamicConfigOverrides {
 		host.overrideDynamicConfig(t, key, value)
 	}
@@ -459,6 +476,46 @@ type conformanceHistoryClient struct {
 	historyservice.HistoryServiceClient
 	admin      adminservice.AdminServiceClient
 	namespaces *conformanceNamespaceSet
+}
+
+// conformanceExecutionManager projects the one read-only persistence observation in
+// ClientMisc through tokeirad's scoped AdminService response. Embedding the interface
+// leaves every mutating or unrelated persistence method unavailable; this adapter does
+// not introduce an in-process persistence topology.
+type conformanceExecutionManager struct {
+	persistence.ExecutionManager
+	admin      adminservice.AdminServiceClient
+	namespaces *conformanceNamespaceSet
+}
+
+func (c *conformanceExecutionManager) GetWorkflowExecution(
+	ctx context.Context,
+	request *persistence.GetWorkflowExecutionRequest,
+) (*persistence.GetWorkflowExecutionResponse, error) {
+	namespace, ok := c.namespaces.nameForID(request.NamespaceID)
+	if !ok {
+		return nil, status.Errorf(
+			codes.NotFound,
+			"tokeira conformance: namespace id %q is not registered",
+			request.NamespaceID,
+		)
+	}
+	response, err := c.admin.DescribeMutableState(
+		ctx,
+		&adminservice.DescribeMutableStateRequest{
+			Namespace: namespace,
+			Execution: &commonpb.WorkflowExecution{
+				WorkflowId: request.WorkflowID,
+				RunId:      request.RunID,
+			},
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &persistence.GetWorkflowExecutionResponse{
+		State: response.GetDatabaseMutableState(),
+	}, nil
 }
 
 func (c *conformanceHistoryClient) GetMutableState(
