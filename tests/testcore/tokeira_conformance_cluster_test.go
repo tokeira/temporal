@@ -3,10 +3,13 @@ package testcore
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/quick"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -16,6 +19,7 @@ import (
 	nexuspb "go.temporal.io/api/nexus/v1"
 	"go.temporal.io/api/operatorservice/v1"
 	"go.temporal.io/api/serviceerror"
+	taskqueuepb "go.temporal.io/api/taskqueue/v1"
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/server/api/adminservice/v1"
 	deploymentspb "go.temporal.io/server/api/deployment/v1"
@@ -25,7 +29,104 @@ import (
 	"go.temporal.io/server/common/authorization"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+func TestConformancePriorityObservationProjection(t *testing.T) {
+	// Feature: task-queue-priority-fairness, Property 18
+	property := func(pollerCount uint8, backlog uint16, timestampSeed uint32, batchSeed uint8) bool {
+		pollerCount %= 16
+		pollers := make([]*taskqueuepb.PollerInfo, int(pollerCount))
+		for i := range pollers {
+			pollers[i] = &taskqueuepb.PollerInfo{
+				Identity:       fmt.Sprintf("worker-%d", i),
+				LastAccessTime: timestamppb.New(time.Unix(int64(timestampSeed)+int64(i), 0)),
+			}
+		}
+		public := &workflowservice.DescribeTaskQueueResponse{
+			Pollers: pollers,
+			Stats: &taskqueuepb.TaskQueueStats{
+				ApproximateBacklogCount: int64(backlog),
+			},
+			StatsByPriorityKey: map[int32]*taskqueuepb.TaskQueueStats{
+				1: {ApproximateBacklogCount: int64(backlog)},
+			},
+		}
+		projected := projectConformanceTaskQueuePartition(public)
+		physical := projected.GetVersionsInfoInternal()[""].GetPhysicalTaskQueueInfo()
+		if len(physical.GetPollers()) != len(pollers) ||
+			physical.GetTaskQueueStats().GetApproximateBacklogCount() != int64(backlog) ||
+			physical.GetInternalTaskQueueStatus()[0].GetApproximateBacklogCount() != int64(backlog) ||
+			physical.GetTaskQueueStatsByPriorityKey()[1].GetApproximateBacklogCount() != int64(backlog) {
+			return false
+		}
+		for i := range pollers {
+			if physical.GetPollers()[i].GetIdentity() != pollers[i].GetIdentity() ||
+				!physical.GetPollers()[i].GetLastAccessTime().AsTime().Equal(
+					pollers[i].GetLastAccessTime().AsTime(),
+				) {
+				return false
+			}
+		}
+		batch := int32(batchSeed%32) + 1
+		tasks := projectConformanceTaskQueueTasks(public, batch)
+		expected := min(int64(backlog), int64(batch))
+		if len(tasks.GetTasks()) != int(expected) {
+			return false
+		}
+		for _, name := range []string{
+			"TestFairnessSuite/TestMigration_FromClassic",
+			"TestFairnessSuite/TestMigration_FromPri",
+			"TestFairnessSuite/TestMigration_FromFair",
+			"TestFairnessAutoEnableSuite/TestMigration_FromClassic",
+			"TestFairnessAutoEnableSuite/TestMigration_FromPri",
+			"TestFairnessAutoEnableSuite/TestMigration_FromFair",
+			"TestFairnessSuite/TestUpdateWorkflowExecutionOptions_InvalidatesPendingTask",
+			"TestPrioritySuite/TestStickyInteraction_SinglePartition",
+		} {
+			if _, ok := conformanceSkipReason(name); !ok {
+				return false
+			}
+		}
+		for _, name := range []string{
+			"TestPrioritySuite/TestActivity_Basic",
+			"TestPrioritySuite/TestSubqueue_Migration",
+			"TestFairnessSuite/Test_Activity_Basic",
+			"TestFairnessAutoEnableSuite/Test_Activity_Basic",
+		} {
+			if _, ok := conformanceSkipReason(name); ok {
+				return false
+			}
+		}
+		return true
+	}
+	require.NoError(t, quick.Check(property, &quick.Config{
+		MaxCount: 100,
+		Rand:     rand.New(rand.NewSource(31)),
+	}))
+}
+
+type conformanceAdminDelegate struct {
+	adminservice.AdminServiceClient
+	called bool
+}
+
+func (d *conformanceAdminDelegate) DescribeCluster(
+	_ context.Context,
+	_ *adminservice.DescribeClusterRequest,
+	_ ...grpc.CallOption,
+) (*adminservice.DescribeClusterResponse, error) {
+	d.called = true
+	return &adminservice.DescribeClusterResponse{}, nil
+}
+
+func TestConformancePriorityObservationDelegatesUnrelatedAdminMethods(t *testing.T) {
+	delegate := &conformanceAdminDelegate{}
+	client := &conformanceAdminClient{AdminServiceClient: delegate}
+	_, err := client.DescribeCluster(context.Background(), &adminservice.DescribeClusterRequest{})
+	require.NoError(t, err)
+	require.True(t, delegate.called)
+}
 
 func TestConformanceAuthorizationBridgeRoutesByExactNamespace(t *testing.T) {
 	hostA := &TemporalImpl{}

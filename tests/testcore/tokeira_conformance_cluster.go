@@ -41,6 +41,7 @@ import (
 
 	commonpb "go.temporal.io/api/common/v1"
 	deploymentpb "go.temporal.io/api/deployment/v1"
+	enumspb "go.temporal.io/api/enums/v1"
 	nexuspb "go.temporal.io/api/nexus/v1"
 	"go.temporal.io/api/operatorservice/v1"
 	"go.temporal.io/api/serviceerror"
@@ -52,6 +53,7 @@ import (
 	"go.temporal.io/server/api/historyservice/v1"
 	"go.temporal.io/server/api/matchingservice/v1"
 	persistencespb "go.temporal.io/server/api/persistence/v1"
+	taskqueuespb "go.temporal.io/server/api/taskqueue/v1"
 	"go.temporal.io/server/common/cluster"
 	"go.temporal.io/server/common/dynamicconfig"
 	"go.temporal.io/server/common/log"
@@ -145,7 +147,7 @@ func newConformanceCluster(
 	}
 	frontendClient := workflowservice.NewWorkflowServiceClient(conn)
 	operatorClient := operatorservice.NewOperatorServiceClient(conn)
-	adminClient := adminservice.NewAdminServiceClient(conn)
+	rawAdminClient := adminservice.NewAdminServiceClient(conn)
 
 	clusterMetadataConfig := cluster.NewTestClusterMetadataConfig(
 		clusterConfig.ClusterMetadata.EnableGlobalNamespace,
@@ -166,6 +168,11 @@ func newConformanceCluster(
 	// own namespace series on the shared tokeirad /metrics.
 	namespaces := newConformanceNamespaceSet()
 	nexusEndpoints := newConformanceNexusEndpointState(operatorClient, frontendClient, namespaces)
+	adminClient := &conformanceAdminClient{
+		AdminServiceClient: rawAdminClient,
+		frontend:           frontendClient,
+		namespaces:         namespaces,
+	}
 	testBase := &persistencetests.TestBase{
 		MetadataManager:      &conformanceMetadataManager{frontend: frontendClient, namespaces: namespaces},
 		NexusEndpointManager: &conformanceNexusEndpointManager{state: nexusEndpoints},
@@ -465,6 +472,138 @@ type conformanceMatchingClient struct {
 	frontend   workflowservice.WorkflowServiceClient
 	namespaces *conformanceNamespaceSet
 	nexus      *conformanceNexusEndpointState
+}
+
+// conformanceAdminClient adapts two read-only matching observations used by the
+// priority/fairness corpus to the equivalent public DescribeTaskQueue projection.
+// Every unrelated AdminService method is promoted from the embedded real client.
+// This keeps the Shape-2 seam scoped: it does not invent a matching service or
+// task payloads, and it cannot mutate the external server.
+type conformanceAdminClient struct {
+	adminservice.AdminServiceClient
+	frontend   workflowservice.WorkflowServiceClient
+	namespaces *conformanceNamespaceSet
+}
+
+func (c *conformanceAdminClient) DescribeTaskQueuePartition(
+	ctx context.Context,
+	request *adminservice.DescribeTaskQueuePartitionRequest,
+	opts ...grpc.CallOption,
+) (*adminservice.DescribeTaskQueuePartitionResponse, error) {
+	if request == nil || request.GetTaskQueuePartition() == nil {
+		return nil, status.Error(codes.InvalidArgument, "task queue partition is required")
+	}
+	if !c.namespaces.containsExact(request.GetNamespace()) {
+		return nil, status.Errorf(
+			codes.NotFound,
+			"tokeira conformance: namespace %q is not registered in this cluster",
+			request.GetNamespace(),
+		)
+	}
+	partition := request.GetTaskQueuePartition()
+	taskQueueName := partition.GetTaskQueue()
+	taskQueueKind := enumspb.TASK_QUEUE_KIND_NORMAL
+	if stickyName := partition.GetStickyName(); stickyName != "" {
+		taskQueueName = stickyName
+		taskQueueKind = enumspb.TASK_QUEUE_KIND_STICKY
+	}
+	response, err := c.frontend.DescribeTaskQueue(
+		ctx,
+		&workflowservice.DescribeTaskQueueRequest{
+			Namespace:     request.GetNamespace(),
+			TaskQueue:     &taskqueuepb.TaskQueue{Name: taskQueueName, Kind: taskQueueKind},
+			TaskQueueType: partition.GetTaskQueueType(),
+			ReportStats:   true,
+			ReportPollers: true,
+		},
+		opts...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return projectConformanceTaskQueuePartition(response), nil
+}
+
+func (c *conformanceAdminClient) GetTaskQueueTasks(
+	ctx context.Context,
+	request *adminservice.GetTaskQueueTasksRequest,
+	opts ...grpc.CallOption,
+) (*adminservice.GetTaskQueueTasksResponse, error) {
+	if request == nil {
+		return nil, status.Error(codes.InvalidArgument, "request is required")
+	}
+	if !c.namespaces.containsExact(request.GetNamespace()) {
+		return nil, status.Errorf(
+			codes.NotFound,
+			"tokeira conformance: namespace %q is not registered in this cluster",
+			request.GetNamespace(),
+		)
+	}
+	response, err := c.frontend.DescribeTaskQueue(
+		ctx,
+		&workflowservice.DescribeTaskQueueRequest{
+			Namespace: request.GetNamespace(),
+			TaskQueue: &taskqueuepb.TaskQueue{
+				Name: request.GetTaskQueue(),
+				Kind: enumspb.TASK_QUEUE_KIND_NORMAL,
+			},
+			TaskQueueType: request.GetTaskQueueType(),
+			ReportStats:   true,
+		},
+		opts...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return projectConformanceTaskQueueTasks(response, request.GetBatchSize()), nil
+}
+
+func projectConformanceTaskQueuePartition(
+	response *workflowservice.DescribeTaskQueueResponse,
+) *adminservice.DescribeTaskQueuePartitionResponse {
+	if response == nil {
+		response = &workflowservice.DescribeTaskQueueResponse{}
+	}
+	count := response.GetStats().GetApproximateBacklogCount()
+	physical := &taskqueuespb.PhysicalTaskQueueInfo{
+		Pollers:                     response.GetPollers(),
+		TaskQueueStats:              response.GetStats(),
+		TaskQueueStatsByPriorityKey: response.GetStatsByPriorityKey(),
+		InternalTaskQueueStatus: []*taskqueuespb.InternalTaskQueueStatus{{
+			ApproximateBacklogCount: count,
+			LoadedTasks:             count,
+			BacklogDrained:          count == 0,
+		}},
+	}
+	return &adminservice.DescribeTaskQueuePartitionResponse{
+		VersionsInfoInternal: map[string]*taskqueuespb.TaskQueueVersionInfoInternal{
+			"": {PhysicalTaskQueueInfo: physical},
+		},
+	}
+}
+
+func projectConformanceTaskQueueTasks(
+	response *workflowservice.DescribeTaskQueueResponse,
+	batchSize int32,
+) *adminservice.GetTaskQueueTasksResponse {
+	if response == nil || batchSize <= 0 {
+		return &adminservice.GetTaskQueueTasksResponse{}
+	}
+	count := response.GetStats().GetApproximateBacklogCount()
+	if count < 0 {
+		count = 0
+	}
+	if count > int64(batchSize) {
+		count = int64(batchSize)
+	}
+	tasks := make([]*persistencespb.AllocatedTaskInfo, int(count))
+	for i := range tasks {
+		// The active leaves only observe task presence/count. An empty shell is
+		// intentional: inventing matching-persistence payload semantics would
+		// exceed this read-only compatibility seam.
+		tasks[i] = &persistencespb.AllocatedTaskInfo{}
+	}
+	return &adminservice.GetTaskQueueTasksResponse{Tasks: tasks}
 }
 
 // conformanceHistoryClient projects the one read-only HistoryService observation used by

@@ -43,6 +43,18 @@ const versioning3InternalRoutingMutationReason = "drives the scenario by calling
 	"surface is not a public Temporal API and has no equivalent in Tokeira's runtime-owned Worker " +
 	"Deployment registry; the externally observable V3 routing paths remain active."
 
+const priorityFairnessMatcherMigrationReason = "asserts Temporal v1.31.0's classic/new/fair " +
+	"matcher migration topology through internal draining/active physical-queue status " +
+	"(tests/priority_fairness_test.go @ v1.31.0). Tokeira has one runtime-owned delivery " +
+	"broker and no classic/new matcher persistence migration; public priority and fairness " +
+	"ordering tendency leaves remain active."
+
+const priorityStickyCorpusCollisionReason = "pinned v1.31.0 corpus lifecycle defect: " +
+	"TestActivity_Basic leaves workflow IDs wf0..wf19 running, then this leaf reuses wf0..wf9 " +
+	"with the default WORKFLOW_ID_CONFLICT_POLICY_FAIL (workflow_handler.go @ v1.31.0); " +
+	"the same sticky-priority leaf passes in isolation and Tokeira also covers the ordering " +
+	"with delivery-plane properties."
+
 var conformanceSkips = []conformanceSkip{
 	{
 		nameContains: "TestVersioning3FunctionalSuite/TestUnpinnedTask_OldDeployment",
@@ -683,6 +695,43 @@ var conformanceSkips = []conformanceSkip{
 			"has one matching partition and no old/new matcher mode, so the test premise is " +
 			"outside the public Shape-2 contract; public queue stats and API/worker rate limits " +
 			"remain covered by active sibling leaves.",
+	},
+	{
+		nameContains: "TestFairnessSuite/TestMigration_FromClassic",
+		reason:       priorityFairnessMatcherMigrationReason,
+	},
+	{
+		nameContains: "TestFairnessSuite/TestMigration_FromPri",
+		reason:       priorityFairnessMatcherMigrationReason,
+	},
+	{
+		nameContains: "TestFairnessSuite/TestMigration_FromFair",
+		reason:       priorityFairnessMatcherMigrationReason,
+	},
+	{
+		nameContains: "TestFairnessAutoEnableSuite/TestMigration_FromClassic",
+		reason:       priorityFairnessMatcherMigrationReason,
+	},
+	{
+		nameContains: "TestFairnessAutoEnableSuite/TestMigration_FromPri",
+		reason:       priorityFairnessMatcherMigrationReason,
+	},
+	{
+		nameContains: "TestFairnessAutoEnableSuite/TestMigration_FromFair",
+		reason:       priorityFairnessMatcherMigrationReason,
+	},
+	{
+		nameContains: "TestFairnessSuite/TestUpdateWorkflowExecutionOptions_InvalidatesPendingTask",
+		reason: "asserts in-process matching-client request/failure metrics, including the Go " +
+			"concrete error type for an obsolete matching task " +
+			"(tests/priority_fairness_test.go @ v1.31.0). Shape-2 observes an external " +
+			"tokeirad and cannot capture Temporal's internal client calls; the same leaf's " +
+			"public Priority update, history, Describe, poll, and stale-dispatch behavior is " +
+			"covered by Tokeira wire-level regression tests.",
+	},
+	{
+		nameContains: "TestPrioritySuite/TestStickyInteraction_SinglePartition",
+		reason:       priorityStickyCorpusCollisionReason,
 	},
 	{
 		nameContains: "TestScheduleV1/TestRefresh",
