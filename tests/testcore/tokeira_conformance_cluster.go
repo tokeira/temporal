@@ -752,82 +752,71 @@ func (c *conformanceMatchingClient) GetTaskQueueUserData(
 	}
 	taskQueueFamily := partition.TaskQueue().Name()
 
+	response, err := c.frontend.DescribeTaskQueue(
+		ctx,
+		&workflowservice.DescribeTaskQueueRequest{
+			Namespace:     namespace,
+			TaskQueue:     &taskqueuepb.TaskQueue{Name: taskQueueFamily},
+			TaskQueueType: request.GetTaskQueueType(),
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Temporal's matching owner answers GetTaskQueueUserData from the requested queue's
+	// partition manager (`service/matching/matching_engine.go @ v1.31.0`). Preserve that
+	// bounded scope by projecting the public view of this queue, rather than scanning every
+	// deployment in the namespace. The latter grows quadratically in the shared Versioning3
+	// suite and can outlive the corpus's 30-second observation context.
 	deploymentData := &persistencespb.DeploymentData{
 		DeploymentsData: make(map[string]*persistencespb.WorkerDeploymentData),
 	}
-	var pageToken []byte
-	for {
-		page, err := c.frontend.ListWorkerDeployments(
-			ctx,
-			&workflowservice.ListWorkerDeploymentsRequest{
-				Namespace:     namespace,
-				PageSize:      100,
-				NextPageToken: pageToken,
-			},
-		)
-		if err != nil {
-			return nil, err
-		}
-		for _, summary := range page.GetWorkerDeployments() {
-			deployment, err := c.frontend.DescribeWorkerDeployment(
-				ctx,
-				&workflowservice.DescribeWorkerDeploymentRequest{
-					Namespace:      namespace,
-					DeploymentName: summary.GetName(),
-				},
-			)
-			if err != nil {
-				if status.Code(err) == codes.NotFound {
-					continue
-				}
-				return nil, err
-			}
-			info := deployment.GetWorkerDeploymentInfo()
-			for _, versionSummary := range info.GetVersionSummaries() {
-				version := versionSummary.GetDeploymentVersion()
-				if version == nil {
-					continue
-				}
-				versionInfo, err := c.frontend.DescribeWorkerDeploymentVersion(
-					ctx,
-					&workflowservice.DescribeWorkerDeploymentVersionRequest{
-						Namespace:         namespace,
-						DeploymentVersion: version,
-					},
-				)
-				if err != nil {
-					if status.Code(err) == codes.NotFound {
-						continue
-					}
-					return nil, err
-				}
-				for _, taskQueue := range versionInfo.GetVersionTaskQueues() {
-					if taskQueue.GetName() != taskQueueFamily ||
-						taskQueue.GetType() != request.GetTaskQueueType() {
-						continue
-					}
-					entry := deploymentData.DeploymentsData[version.GetDeploymentName()]
-					if entry == nil {
-						entry = &persistencespb.WorkerDeploymentData{
-							RoutingConfig: info.GetRoutingConfig(),
-							Versions:      make(map[string]*deploymentspb.WorkerDeploymentVersionData),
-						}
-						deploymentData.DeploymentsData[version.GetDeploymentName()] = entry
-					}
-					// The leaf uses this internal view only to observe public membership. A
-					// live public Version corresponds to revision zero and deleted=false,
-					// which are the v1.31.0 defaults after poll-driven recreation.
-					entry.Versions[version.GetBuildId()] = &deploymentspb.WorkerDeploymentVersionData{
-						Status: versionInfo.GetWorkerDeploymentVersionInfo().GetStatus(),
-					}
-				}
-			}
-		}
-		pageToken = page.GetNextPageToken()
-		if len(pageToken) == 0 {
-			break
+	versioningInfo := response.GetVersioningInfo()
+	var routingConfig *deploymentpb.RoutingConfig
+	if versioningInfo != nil {
+		routingConfig = &deploymentpb.RoutingConfig{
+			CurrentDeploymentVersion:            versioningInfo.GetCurrentDeploymentVersion(),
+			RampingDeploymentVersion:            versioningInfo.GetRampingDeploymentVersion(),
+			RampingVersionPercentage:            versioningInfo.GetRampingVersionPercentage(),
+			CurrentVersionChangedTime:           versioningInfo.GetUpdateTime(),
+			RampingVersionChangedTime:           versioningInfo.GetUpdateTime(),
+			RampingVersionPercentageChangedTime: versioningInfo.GetUpdateTime(),
 		}
 	}
+	upsertVersion := func(version *deploymentpb.WorkerDeploymentVersion) {
+		if version == nil || version.GetDeploymentName() == "" || version.GetBuildId() == "" {
+			return
+		}
+		entry := deploymentData.DeploymentsData[version.GetDeploymentName()]
+		if entry == nil {
+			entry = &persistencespb.WorkerDeploymentData{
+				RoutingConfig: routingConfig,
+				Versions:      make(map[string]*deploymentspb.WorkerDeploymentVersionData),
+			}
+			deploymentData.DeploymentsData[version.GetDeploymentName()] = entry
+		}
+		versionData := &deploymentspb.WorkerDeploymentVersionData{
+			Status: enumspb.WORKER_DEPLOYMENT_VERSION_STATUS_INACTIVE,
+		}
+		if sameWorkerDeploymentVersion(version, versioningInfo.GetCurrentDeploymentVersion()) {
+			versionData.Status = enumspb.WORKER_DEPLOYMENT_VERSION_STATUS_CURRENT
+		} else if sameWorkerDeploymentVersion(version, versioningInfo.GetRampingDeploymentVersion()) {
+			versionData.Status = enumspb.WORKER_DEPLOYMENT_VERSION_STATUS_RAMPING
+		}
+		entry.Versions[version.GetBuildId()] = versionData
+	}
+	for _, poller := range response.GetPollers() {
+		options := poller.GetDeploymentOptions()
+		upsertVersion(&deploymentpb.WorkerDeploymentVersion{
+			DeploymentName: options.GetDeploymentName(),
+			BuildId:        options.GetBuildId(),
+		})
+	}
+	// Routing versions remain observable even if their last poll aged out of the public
+	// poller list. This matches the task-queue-local persistence view the corpus observes.
+	upsertVersion(versioningInfo.GetCurrentDeploymentVersion())
+	upsertVersion(versioningInfo.GetRampingDeploymentVersion())
 
 	return &matchingservice.GetTaskQueueUserDataResponse{
 		UserData: &persistencespb.VersionedTaskQueueUserData{
@@ -838,6 +827,12 @@ func (c *conformanceMatchingClient) GetTaskQueueUserData(
 			},
 		},
 	}, nil
+}
+
+func sameWorkerDeploymentVersion(left, right *deploymentpb.WorkerDeploymentVersion) bool {
+	return left != nil && right != nil &&
+		left.GetDeploymentName() == right.GetDeploymentName() &&
+		left.GetBuildId() == right.GetBuildId()
 }
 
 // conformanceNexusEndpointState maps the corpus's internal Matching/Persistence endpoint views onto

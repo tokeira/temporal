@@ -249,26 +249,11 @@ func (o *conformanceNexusOperator) ListNexusEndpoints(
 
 type conformanceMatchingFrontend struct {
 	workflowservice.WorkflowServiceClient
-	response                   *workflowservice.DescribeWorkerDeploymentVersionResponse
-	request                    *workflowservice.DescribeWorkerDeploymentVersionRequest
-	listResponse               *workflowservice.ListWorkerDeploymentsResponse
-	describeDeploymentResponse *workflowservice.DescribeWorkerDeploymentResponse
-}
-
-func (f *conformanceMatchingFrontend) ListWorkerDeployments(
-	_ context.Context,
-	_ *workflowservice.ListWorkerDeploymentsRequest,
-	_ ...grpc.CallOption,
-) (*workflowservice.ListWorkerDeploymentsResponse, error) {
-	return f.listResponse, nil
-}
-
-func (f *conformanceMatchingFrontend) DescribeWorkerDeployment(
-	_ context.Context,
-	_ *workflowservice.DescribeWorkerDeploymentRequest,
-	_ ...grpc.CallOption,
-) (*workflowservice.DescribeWorkerDeploymentResponse, error) {
-	return f.describeDeploymentResponse, nil
+	response                  *workflowservice.DescribeWorkerDeploymentVersionResponse
+	request                   *workflowservice.DescribeWorkerDeploymentVersionRequest
+	describeTaskQueueResponse *workflowservice.DescribeTaskQueueResponse
+	describeTaskQueueRequest  *workflowservice.DescribeTaskQueueRequest
+	describeTaskQueueCalls    int
 }
 
 func (f *conformanceMatchingFrontend) DescribeWorkerDeploymentVersion(
@@ -278,6 +263,16 @@ func (f *conformanceMatchingFrontend) DescribeWorkerDeploymentVersion(
 ) (*workflowservice.DescribeWorkerDeploymentVersionResponse, error) {
 	f.request = request
 	return f.response, nil
+}
+
+func (f *conformanceMatchingFrontend) DescribeTaskQueue(
+	_ context.Context,
+	request *workflowservice.DescribeTaskQueueRequest,
+	_ ...grpc.CallOption,
+) (*workflowservice.DescribeTaskQueueResponse, error) {
+	f.describeTaskQueueCalls++
+	f.describeTaskQueueRequest = request
+	return f.describeTaskQueueResponse, nil
 }
 
 func TestConformanceMatchingClientChecksPublicDeploymentProjection(t *testing.T) {
@@ -330,33 +325,31 @@ func TestConformanceMatchingClientRejectsUnknownNamespaceID(t *testing.T) {
 	require.Nil(t, response)
 }
 
-func TestConformanceMatchingClientProjectsTaskQueueUserDataFromPublicDeploymentAPIs(t *testing.T) {
+func TestConformanceMatchingClientProjectsTaskQueueLocalUserData(t *testing.T) {
 	namespaces := newConformanceNamespaceSet()
 	namespaces.addID("namespace-id", "namespace-name")
-	version := &deploymentpb.WorkerDeploymentVersion{
+	updateTime := timestamppb.New(time.Unix(1234, 0))
+	current := &deploymentpb.WorkerDeploymentVersion{
 		DeploymentName: "deployment",
-		BuildId:        "build-id",
+		BuildId:        "current-build",
+	}
+	ramping := &deploymentpb.WorkerDeploymentVersion{
+		DeploymentName: "deployment",
+		BuildId:        "ramping-build",
 	}
 	frontend := &conformanceMatchingFrontend{
-		listResponse: &workflowservice.ListWorkerDeploymentsResponse{
-			WorkerDeployments: []*workflowservice.ListWorkerDeploymentsResponse_WorkerDeploymentSummary{
-				{Name: "deployment"},
+		describeTaskQueueResponse: &workflowservice.DescribeTaskQueueResponse{
+			Pollers: []*taskqueuepb.PollerInfo{
+				{DeploymentOptions: &deploymentpb.WorkerDeploymentOptions{
+					DeploymentName: "deployment",
+					BuildId:        "inactive-build",
+				}},
 			},
-		},
-		describeDeploymentResponse: &workflowservice.DescribeWorkerDeploymentResponse{
-			WorkerDeploymentInfo: &deploymentpb.WorkerDeploymentInfo{
-				Name: "deployment",
-				VersionSummaries: []*deploymentpb.WorkerDeploymentInfo_WorkerDeploymentVersionSummary{
-					{DeploymentVersion: version},
-				},
-			},
-		},
-		response: &workflowservice.DescribeWorkerDeploymentVersionResponse{
-			WorkerDeploymentVersionInfo: &deploymentpb.WorkerDeploymentVersionInfo{
-				Status: enumspb.WORKER_DEPLOYMENT_VERSION_STATUS_CURRENT,
-			},
-			VersionTaskQueues: []*workflowservice.DescribeWorkerDeploymentVersionResponse_VersionTaskQueue{
-				{Name: "workflow-queue", Type: enumspb.TASK_QUEUE_TYPE_WORKFLOW},
+			VersioningInfo: &taskqueuepb.TaskQueueVersioningInfo{
+				CurrentDeploymentVersion: current,
+				RampingDeploymentVersion: ramping,
+				RampingVersionPercentage: 25,
+				UpdateTime:               updateTime,
 			},
 		},
 	}
@@ -371,12 +364,20 @@ func TestConformanceMatchingClientProjectsTaskQueueUserDataFromPublicDeploymentA
 		},
 	)
 	require.NoError(t, err)
-	versionData := response.GetUserData().GetData().GetPerType()[int32(enumspb.TASK_QUEUE_TYPE_WORKFLOW)].
-		GetDeploymentData().GetDeploymentsData()["deployment"].GetVersions()["build-id"]
-	require.NotNil(t, versionData)
-	require.Zero(t, versionData.GetRevisionNumber())
-	require.False(t, versionData.GetDeleted())
-	require.Equal(t, enumspb.WORKER_DEPLOYMENT_VERSION_STATUS_CURRENT, versionData.GetStatus())
+	require.Equal(t, 1, frontend.describeTaskQueueCalls)
+	require.Equal(t, "namespace-name", frontend.describeTaskQueueRequest.GetNamespace())
+	require.Equal(t, "workflow-queue", frontend.describeTaskQueueRequest.GetTaskQueue().GetName())
+	require.Equal(t, enumspb.TASK_QUEUE_TYPE_WORKFLOW, frontend.describeTaskQueueRequest.GetTaskQueueType())
+
+	data := response.GetUserData().GetData().GetPerType()[int32(enumspb.TASK_QUEUE_TYPE_WORKFLOW)].
+		GetDeploymentData().GetDeploymentsData()["deployment"]
+	require.Equal(t, enumspb.WORKER_DEPLOYMENT_VERSION_STATUS_INACTIVE, data.GetVersions()["inactive-build"].GetStatus())
+	require.Equal(t, enumspb.WORKER_DEPLOYMENT_VERSION_STATUS_CURRENT, data.GetVersions()["current-build"].GetStatus())
+	require.Equal(t, enumspb.WORKER_DEPLOYMENT_VERSION_STATUS_RAMPING, data.GetVersions()["ramping-build"].GetStatus())
+	require.Equal(t, current, data.GetRoutingConfig().GetCurrentDeploymentVersion())
+	require.Equal(t, ramping, data.GetRoutingConfig().GetRampingDeploymentVersion())
+	require.Equal(t, float32(25), data.GetRoutingConfig().GetRampingVersionPercentage())
+	require.Equal(t, updateTime, data.GetRoutingConfig().GetCurrentVersionChangedTime())
 }
 
 type conformanceHistoryAdmin struct {
