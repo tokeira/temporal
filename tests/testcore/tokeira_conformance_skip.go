@@ -600,15 +600,6 @@ var conformanceSkips = []conformanceSkip{
 			"is deferred and tracked separately — not a public-HTTP-Nexus conformance claim",
 	},
 	{
-		nameContains: "TestWorkflowTestSuite/TestStartWorkflowExecution_InternalTaskQueue/multiOp",
-		reason: "DEFERRED GAP: requires ExecuteMultiOperation (Update-with-Start) to return a typed " +
-			"serviceerror.MultiOperationExecution wrapping per-operation validation errors. tokeira " +
-			"does not implement the MultiOperation feature yet (ExecuteMultiOperation returns " +
-			"Unimplemented); tracked under the api-conformance-multi-operation spec. The sibling " +
-			"per-NS-task-queue validation itself PASSES via StartWorkflowExecution/" +
-			"SignalWithStartWorkflowExecution in this same test.",
-	},
-	{
 		nameContains: "TestWorkflowTaskTestSuite/TestWorkflowTaskHeartbeatingWithEmptyResult",
 		reason: "OUT OF SCOPE (owner decision 2026-07-03): depends on " +
 			"OverrideDynamicConfig(WorkflowTaskHeartbeatTimeout=5s) vs the 30m default " +
@@ -618,15 +609,6 @@ var conformanceSkips = []conformanceSkip{
 			"MaxCallbacksPerWorkflow OverrideDynamicConfig skip. Permanent skip, not implemented (no " +
 			"config knob, no PendingWorkflowTask.original_scheduled_at). Spec .kiro/specs/transient-wft/ " +
 			"Item C; raised in docs/HANDOVER-transient-wft.md (C).",
-	},
-	{
-		nameContains: "TestWorkflowTestSuite/TestStartWorkflowExecution_UseExisting_OnConflictOptions/" +
-			"OnConflictOptions_failed_max_callbacks_per_workflow",
-		reason: "requires OverrideDynamicConfig(MaxCallbacksPerWorkflow=1); tokeira does not support " +
-			"dynamic-config injection over the wire (MaxCallbacksPerWorkflow is a pinned constant), " +
-			"so the leaf's premise — lowering the limit to 1 mid-test — cannot reach an " +
-			"out-of-process tokeirad. Same class as the other OverrideDynamicConfig skips in this " +
-			"registry.",
 	},
 	{
 		nameContains: "TestWorkflowResetTestSuite/TestResetWorkflowWithOptionsUpdate",
