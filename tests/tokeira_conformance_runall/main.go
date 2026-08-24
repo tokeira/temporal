@@ -77,7 +77,19 @@ const (
 	// whole corpus; an entrypoint that exceeds it is killed by `go test` and
 	// recorded as a failure (data), and the runner moves on to the next.
 	perTestTimeout = 5 * time.Minute
+	// Versioning3 expands several suite methods into forwarding-mode matrices and
+	// makes steady progress well beyond the ordinary entrypoint bound. Keep it in
+	// one isolated process, but allow the matrix to finish so the ledger does not
+	// misclassify its unvisited leaves as unfinished.
+	versioning3Timeout = 30 * time.Minute
 )
+
+func timeoutForEntrypoint(name string) time.Duration {
+	if name == "TestVersioning3FunctionalSuite" {
+		return versioning3Timeout
+	}
+	return perTestTimeout
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -205,7 +217,7 @@ func runEntrypoint(addr, metricsAddr, controlAddr, authCallbackURL, name string,
 		// Temporal's dedicated clusters isolate them, so preserve that isolation
 		// by running one leaf at a time.
 		"-parallel=1",
-		"-timeout", perTestTimeout.String(),
+		"-timeout", timeoutForEntrypoint(name).String(),
 		"-run", "^" + name + "$",
 	}
 	// Skip the registered out-of-scope sub-tests under this entrypoint (raw t.Run

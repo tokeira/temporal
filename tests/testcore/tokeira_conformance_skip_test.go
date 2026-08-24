@@ -143,6 +143,35 @@ func TestConformanceSkipRegexp_TaskQueueMetrics(t *testing.T) {
 	}
 }
 
+func TestConformanceSkipRegexp_WorkerDeploymentInternals(t *testing.T) {
+	const suite = "TestWorkerDeploymentSuite"
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern == "" {
+		t.Fatalf("expected a skip regexp for %s", suite)
+	}
+
+	for _, leaf := range []string{
+		"TestForceCAN_WithOverrideState",
+		"TestSetManagerIdentity_WithDeleteVersion",
+	} {
+		name := suite + "/" + leaf
+		if !matchesSkip(t, pattern, name) {
+			t.Errorf("expected %q to be skipped by %q", name, pattern)
+		}
+	}
+
+	for _, leaf := range []string{
+		"TestForceCAN_NoOpenWFS",
+		"TestSetManagerIdentity_RW",
+		"TestSetManagerIdentity_WithSetRampSetCurrent",
+	} {
+		name := suite + "/" + leaf
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
 func TestConformanceSkipRegexp_AdvancedVisibilityWorkerVersioning(t *testing.T) {
 	for _, suite := range []string{"TestAdvancedVisibilitySuite", "TestAdvancedVisibilitySuiteLegacy"} {
 		pattern := ConformanceSkipRegexp(suite)

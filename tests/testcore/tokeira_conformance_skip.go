@@ -469,6 +469,24 @@ var conformanceSkips = []conformanceSkip{
 			"public API behaviour",
 	},
 	{
+		nameContains: "TestWorkerDeploymentSuite/TestForceCAN_WithOverrideState",
+		reason: "injects the server's internal worker-deployment entity-workflow state " +
+			"(deploymentspb.ForceCANDeploymentSignalArgs.OverrideState, a WorkerDeploymentLocalState) " +
+			"via signal — an internal-surface representation tokeira does not model, not a " +
+			"public API behaviour (tests/worker_deployment_test.go:211-273 @ v1.31.0)",
+	},
+	{
+		nameContains: "TestWorkerDeploymentSuite/TestSetManagerIdentity_WithDeleteVersion",
+		reason: "sets matching.PollerHistoryTTL to 500ms and assumes the two internal " +
+			"worker-deployment entity-workflow manager updates consume that interval before " +
+			"the final delete; tokeira honors the override and retains the cancelled poll " +
+			"admission for the TTL, but its native registry completes both public manager " +
+			"operations before 500ms, so the final delete correctly rejects active pollers. " +
+			"Delaying public RPCs or dropping poller admission early would contradict v1.31.0 " +
+			"(tests/worker_deployment_test.go:1814-1835 and " +
+			"common/dynamicconfig/constants.go:478-483 @ v1.31.0)",
+	},
+	{
 		nameContains: "TestStandaloneActivityTestSuite/TestStart/RequestValidations/InputTooLarge",
 		reason: "asserts at an OverrideDynamicConfig(BlobSizeLimitError=1000) value; tokeira " +
 			"represents the limit as the pinned-release constant and does not accept dynamic-config " +
