@@ -1,3 +1,37 @@
+> # Tokeira fork — Temporal functional conformance (`v1.32.0`)
+>
+> This branch is the Tokeira project's conformance fork of
+> [`temporalio/temporal`](https://github.com/temporalio/temporal), pinned at Temporal
+> `v1.32.0` to match Tokeira's `TEMPORAL_SERVER_TARGET` target. **It is not a fork of the
+> Temporal server for production use.** Its sole purpose is to run Temporal's own
+> functional test corpus, unmodified, against Tokeira — a Temporal-compatible durable
+> execution engine — as Tier 2 of Tokeira's conformance model.
+>
+> **What is changed here:** the `tests/testcore` cluster factory, client adapters,
+> namespace setup, override lifecycle, skip registry, and the metrics capture helper
+> connect the corpus to an external `tokeirad`. The `tests/tokeira_conformance_*`
+> tooling runs and reports the corpus with Go `go1.26.8`. **Upstream test bodies
+> are unchanged.** Every inherited exclusion is reviewed in the
+> [skip audit](tests/testcore/tokeira_conformance_skip_audit.json).
+>
+> Run all entrypoints with `TOKEIRA_BIN=/path/to/tokeirad GOTOOLCHAIN=go1.26.8
+> go run -tags test_dep ./tests/tokeira_conformance_runall/`. Build `tokeirad` with
+> its `conformance` feature to enable configuration, metrics, and authorization
+> bridges. Results include explicitly sourced registry exclusions, because
+> `go test -skip` does not emit test events for filtered names.
+> Each entrypoint gets a fresh engine so a corpus timeout cannot leave overrides
+> or workflows behind for the next suite. Supplying an existing frontend opts
+> into shared state and leaves engine lifecycle management to the operator.
+>
+> **Conformance reporting lives in the Tokeira project**, not here: a wire-coverage
+> recorder in Tokeira's edge joins observed RPCs against Tokeira's compatibility matrix to
+> produce the coverage report. This branch stays thin and re-baselines onto each new
+> Temporal release tag.
+>
+> Upstream Temporal's original README follows.
+>
+> ---
+
 <div class="title-block" style="text-align: center;" align="center">
 
 # Temporal—durable execution platform

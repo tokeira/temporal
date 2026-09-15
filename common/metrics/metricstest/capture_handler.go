@@ -22,17 +22,36 @@ type CapturedRecording struct {
 type Capture struct {
 	recordings     CaptureSnapshot
 	recordingsLock sync.RWMutex
+	// onSnapshot, when non-nil, is invoked by Snapshot to merge externally-sourced
+	// recordings (e.g. metrics scraped from an out-of-process server by the Tokeira
+	// conformance metrics bridge) into the returned snapshot. It is nil for every
+	// in-process capture (StartCapture only sets it when the handler was created with
+	// a source factory), so in-process capture behaviour is unchanged.
+	onSnapshot func() CaptureSnapshot
+	// onStop, when non-nil, is invoked by StopCapture so an external source can freeze
+	// its window at the same moment in-process recording stops (in-process metrics are
+	// no longer captured after StopCapture). This keeps the external snapshot bounded to
+	// [StartCapture, StopCapture] rather than leaking later activity into Snapshot. nil
+	// for in-process captures.
+	onStop func()
 }
 
 type CaptureSnapshot = map[string][]*CapturedRecording
 
-// Snapshot returns a copy of all metrics recorded, keyed by name.
+// Snapshot returns a copy of all metrics recorded, keyed by name. When the capture has
+// an external source (onSnapshot), its recordings are merged in, appended after any
+// in-process recordings for the same metric name.
 func (c *Capture) Snapshot() CaptureSnapshot {
 	c.recordingsLock.RLock()
-	defer c.recordingsLock.RUnlock()
 	ret := maps.Clone(c.recordings)
 	for k, v := range ret {
 		ret[k] = slices.Clone(v)
+	}
+	c.recordingsLock.RUnlock()
+	if c.onSnapshot != nil {
+		for name, recs := range c.onSnapshot() {
+			ret[name] = append(ret[name], recs...)
+		}
 	}
 	return ret
 }
@@ -49,6 +68,14 @@ type CaptureHandler struct {
 	captures     map[*Capture]struct{}
 	capturesLock *sync.RWMutex
 	captureCount *atomic.Int32
+	// sourceFactory, when non-nil, is invoked once per StartCapture to begin an
+	// external metric source for that capture. It returns two per-capture funcs: an
+	// onStop the matching StopCapture invokes (to freeze the source's window), and an
+	// onSnapshot the matching Snapshot invokes (to produce externally-sourced
+	// recordings, e.g. the scrape-and-diff result of the Tokeira conformance metrics
+	// bridge). Calling the factory at StartCapture lets the source record a baseline.
+	// nil for the default in-process handler, so in-process behaviour is unchanged.
+	sourceFactory func() (onStop func(), onSnapshot func() CaptureSnapshot)
 }
 
 var _ metrics.Handler = (*CaptureHandler)(nil)
@@ -62,10 +89,29 @@ func NewCaptureHandler() *CaptureHandler {
 	}
 }
 
+// NewCaptureHandlerWithSource creates a capture handler whose captures are populated
+// from an external source rather than (only) in-process metric recordings. The factory
+// is invoked once per StartCapture and returns the func that capture's Snapshot calls to
+// produce externally-sourced recordings. Used by the Tokeira Tier-2 conformance bridge to
+// feed metrics scraped from an out-of-process tokeirad into the corpus's capture surface.
+func NewCaptureHandlerWithSource(factory func() (onStop func(), onSnapshot func() CaptureSnapshot)) *CaptureHandler {
+	return &CaptureHandler{
+		captures:      map[*Capture]struct{}{},
+		capturesLock:  &sync.RWMutex{},
+		captureCount:  &atomic.Int32{},
+		sourceFactory: factory,
+	}
+}
+
 // StartCapture returns a started capture. StopCapture should be called on
 // complete.
 func (c *CaptureHandler) StartCapture() *Capture {
 	capture := &Capture{recordings: make(CaptureSnapshot)}
+	// Begin the external source (if any) at capture start so it can record a baseline;
+	// the returned funcs are invoked by capture's StopCapture and Snapshot.
+	if c.sourceFactory != nil {
+		capture.onStop, capture.onSnapshot = c.sourceFactory()
+	}
 	c.capturesLock.Lock()
 	defer c.capturesLock.Unlock()
 
@@ -76,6 +122,11 @@ func (c *CaptureHandler) StartCapture() *Capture {
 
 // StopCapture stops capturing metrics for the given capture instance.
 func (c *CaptureHandler) StopCapture(capture *Capture) {
+	// Let an external source freeze its window at the moment in-process recording stops,
+	// so post-stop activity does not leak into a later Snapshot.
+	if capture.onStop != nil {
+		capture.onStop()
+	}
 	c.capturesLock.Lock()
 	defer c.capturesLock.Unlock()
 
@@ -86,10 +137,11 @@ func (c *CaptureHandler) StopCapture(capture *Capture) {
 // WithTags implements [metrics.Handler.WithTags].
 func (c *CaptureHandler) WithTags(tags ...metrics.Tag) metrics.Handler {
 	return &CaptureHandler{
-		tags:         append(append(make([]metrics.Tag, 0, len(c.tags)+len(tags)), c.tags...), tags...),
-		captures:     c.captures,
-		capturesLock: c.capturesLock,
-		captureCount: c.captureCount,
+		tags:          append(append(make([]metrics.Tag, 0, len(c.tags)+len(tags)), c.tags...), tags...),
+		captures:      c.captures,
+		capturesLock:  c.capturesLock,
+		captureCount:  c.captureCount,
+		sourceFactory: c.sourceFactory,
 	}
 }
 

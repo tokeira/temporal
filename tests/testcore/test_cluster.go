@@ -100,6 +100,9 @@ func (f *defaultTestClusterFactory) NewCluster(t *testing.T, clusterConfig *Test
 }
 
 func NewTestClusterFactory() TestClusterFactory {
+	if conformanceFrontendAddr() != "" {
+		return &conformanceClusterFactory{}
+	}
 	tbFactory := &defaultPersistenceTestBaseFactory{}
 	return newTestClusterFactoryWithCustomTestBaseFactory(tbFactory)
 }
@@ -382,6 +385,10 @@ func enableArchivalConfig(cfg *config.Config) {
 
 // TearDownCluster tears down the test cluster
 func (tc *TestCluster) TearDownCluster() error {
+	// The external engine owns persistence; the shim owns only client connections.
+	if conformanceFrontendAddr() != "" {
+		return tc.host.Stop()
+	}
 	errs := tc.host.Stop()
 	tc.testBase.TearDownWorkflowStore()
 	if !UseSQLVisibility() {

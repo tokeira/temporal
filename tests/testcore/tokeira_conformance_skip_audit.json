@@ -1,0 +1,1051 @@
+{
+  "upstream_tag": "v1.32.0",
+  "previous_fork_commit": "5558d9422d33203d8aff9d42fe6b5663b4b1b1bc",
+  "engine_commit": "f78b3412ff1f55edc109b162e9cecef0c7c82de4",
+  "entries": [
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestUnpinnedTask_OldDeployment",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestUnpinnedTask_OldDeployment"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestTransitionFromWft_Sticky",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestTransitionFromWft_Sticky"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestTransitionFromWft_NoSticky",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestTransitionFromWft_NoSticky"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestTransitionFromWft_Sticky_ToUnversioned",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestTransitionFromWft_Sticky_ToUnversioned"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestTransitionFromWft_NoSticky_ToUnversioned",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestTransitionFromWft_NoSticky_ToUnversioned"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestDoubleTransition",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestDoubleTransition"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestDoubleTransition_WithSignal",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestDoubleTransition_WithSignal"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestDoubleTransitionFromUnversioned",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestDoubleTransitionFromUnversioned"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestDoubleTransitionFromUnversioned_WithSignal",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestDoubleTransitionFromUnversioned_WithSignal"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestEagerActivity",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestEagerActivity"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestTransitionFromActivity_Sticky",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestTransitionFromActivity_Sticky"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestTransitionFromActivity_NoSticky",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestTransitionFromActivity_NoSticky"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestIndependentVersionedActivity_Pinned",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestIndependentVersionedActivity_Pinned"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestIndependentVersionedActivity_Unpinned",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestIndependentVersionedActivity_Unpinned"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestIndependentUnversionedActivity_Pinned",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestIndependentUnversionedActivity_Pinned"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestIndependentUnversionedActivity_Unpinned",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestIndependentUnversionedActivity_Unpinned"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestChildWorkflowInheritance_PinnedParent",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestChildWorkflowInheritance_PinnedParent"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestChildWorkflowInheritance_ParentPinnedByOverride",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestChildWorkflowInheritance_ParentPinnedByOverride"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestChildWorkflowInheritance_CrossTQ_Inherit",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestChildWorkflowInheritance_CrossTQ_Inherit"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestDescribeTaskQueueVersioningInfo",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestDescribeTaskQueueVersioningInfo"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestSyncDeploymentUserDataWithRoutingConfig_Update",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestSyncDeploymentUserDataWithRoutingConfig_Update"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestAutoUpgradeWorkflows_NoBouncingBetweenVersions",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestAutoUpgradeWorkflows_NoBouncingBetweenVersions"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestWorkflowTQLags_DependentActivityStartsTransition",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestWorkflowTQLags_DependentActivityStartsTransition"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestActivityTQLags_DependentActivityCompletesOnTheNewVersion",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestActivityTQLags_DependentActivityCompletesOnTheNewVersion"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestChildStartsWithParentRevision_SameTQ_TQLags",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestChildStartsWithParentRevision_SameTQ_TQLags"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestContinueAsNewOfAutoUpgradeWorkflow_RevisionNumberMechanics",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestContinueAsNewOfAutoUpgradeWorkflow_RevisionNumberMechanics"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestWorkflowRetry_AutoUpgrade_NoBounceBack",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestWorkflowRetry_AutoUpgrade_NoBounceBack"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestWorkflowRetry_AutoUpgrade_AfterCAN_NoBounceBack",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestWorkflowRetry_AutoUpgrade_AfterCAN_NoBounceBack"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestWorkflowRetry_AutoUpgrade_ChildNoBounceBack",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestWorkflowRetry_AutoUpgrade_ChildNoBounceBack"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestNexusTask_StaysOnCurrentDeployment",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestNexusTask_StaysOnCurrentDeployment"
+      ],
+      "reason": "Dispatches through internal MatchingService.DispatchNexusTask and installs routing state through SyncDeploymentUserData.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestCheckTaskQueueVersionMembership",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestCheckTaskQueueVersionMembership"
+      ],
+      "reason": "Directly tests the internal MatchingService.CheckTaskQueueVersionMembership contract, outside public WorkflowService behavior.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestMaxVersionsInTaskQueue",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestMaxVersionsInTaskQueue"
+      ],
+      "reason": "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestVersioning3FunctionalSuite/TestVersionedQueueUnload",
+      "action": "retain",
+      "current_names": [
+        "TestVersioning3FunctionalSuite/TestVersionedQueueUnload"
+      ],
+      "reason": "Asserts internal matching partition unload/reload via GetTaskQueueUserData; Tokeira has no Temporal partition-cache lifecycle.",
+      "source": "tests/versioning_3_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestCallbacksSuiteCHASM",
+      "action": "remove",
+      "current_names": [],
+      "reason": "EnableChasm and EnableCHASMCallbacks both default true at v1.32.0 (common/dynamicconfig/constants.go); the old non-default-mode exclusion no longer applies.",
+      "source": "tests/callbacks_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusApiTestSuiteWithLegacyErrorPaths/TestNexusStartOperation_WithNamespaceAndTaskQueue_SupportsVersioning",
+      "action": "retain",
+      "current_names": [
+        "TestNexusApiTestSuiteWithLegacyErrorPaths/TestNexusStartOperation_WithNamespaceAndTaskQueue_SupportsVersioning"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/nexus_api_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusApiTestSuiteWithTemporalFailures/TestNexusStartOperation_WithNamespaceAndTaskQueue_SupportsVersioning",
+      "action": "retain",
+      "current_names": [
+        "TestNexusApiTestSuiteWithTemporalFailures/TestNexusStartOperation_WithNamespaceAndTaskQueue_SupportsVersioning"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/nexus_api_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuite/Test_BuildIdIndexedOnCompletion_VersionedWorker",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuite/Test_BuildIdIndexedOnCompletion_VersionedWorker"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuiteLegacy/Test_BuildIdIndexedOnCompletion_VersionedWorker",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuiteLegacy/Test_BuildIdIndexedOnCompletion_VersionedWorker"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuite/Test_BuildIdIndexedOnReset",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuite/Test_BuildIdIndexedOnReset"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuiteLegacy/Test_BuildIdIndexedOnReset",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuiteLegacy/Test_BuildIdIndexedOnReset"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuite/Test_BuildIdIndexedOnRetry",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuite/Test_BuildIdIndexedOnRetry"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuiteLegacy/Test_BuildIdIndexedOnRetry",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuiteLegacy/Test_BuildIdIndexedOnRetry"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_ByBuildId",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_ByBuildId"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_ByBuildId",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_ByBuildId"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_ByBuildId_NotInNamespace",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_ByBuildId_NotInNamespace"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_ByBuildId_NotInNamespace",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_ByBuildId_NotInNamespace"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_ByBuildId_NotInTaskQueue",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_ByBuildId_NotInTaskQueue"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_ByBuildId_NotInTaskQueue",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_ByBuildId_NotInTaskQueue"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_EmptyBuildIds",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_EmptyBuildIds"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_EmptyBuildIds",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_EmptyBuildIds"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_TooManyBuildIds",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_TooManyBuildIds"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_TooManyBuildIds",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_TooManyBuildIds"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_Unversioned_InNamespace",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_Unversioned_InNamespace"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_Unversioned_InNamespace",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_Unversioned_InNamespace"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_Unversioned_InTaskQueue",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuite/TestWorkerTaskReachability_Unversioned_InTaskQueue"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_Unversioned_InTaskQueue",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuiteLegacy/TestWorkerTaskReachability_Unversioned_InTaskQueue"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuite/TestBuildIdScavenger_DeletesUnusedBuildId",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuite/TestBuildIdScavenger_DeletesUnusedBuildId"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestAdvancedVisibilitySuiteLegacy/TestBuildIdScavenger_DeletesUnusedBuildId",
+      "action": "retain",
+      "current_names": [
+        "TestAdvancedVisibilitySuiteLegacy/TestBuildIdScavenger_DeletesUnusedBuildId"
+      ],
+      "reason": "Requires deprecated worker-versioning V1/V2 enabled behavior. frontend.workerVersioningDataAPIs and frontend.workerVersioningRuleAPIs remain false by default in common/dynamicconfig/constants.go @ v1.32.0; the compatibility scope retains stock rejection.",
+      "source": "tests/advanced_visibility_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowUpdateSuite/TestFirstNormalWorkflowTask_UpdateResurrectedAfterRegistryCleared",
+      "action": "retain",
+      "current_names": [
+        "TestWorkflowUpdateSuite/TestFirstNormalWorkflowTask_UpdateResurrectedAfterRegistryCleared"
+      ],
+      "reason": "Uses CloseShard through clearUpdateRegistryAndAbortPendingUpdates, loseUpdateRegistryAndAbandonPendingUpdates, or closeShard to evict Temporal mutable state. The external engine has no equivalent shard-cache mutation.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowUpdateSuite/TestCompletedSpeculativeWorkflowTask_DeduplicateID",
+      "action": "retain",
+      "current_names": [
+        "TestWorkflowUpdateSuite/TestCompletedSpeculativeWorkflowTask_DeduplicateID"
+      ],
+      "reason": "Uses CloseShard through clearUpdateRegistryAndAbortPendingUpdates, loseUpdateRegistryAndAbandonPendingUpdates, or closeShard to evict Temporal mutable state. The external engine has no equivalent shard-cache mutation.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowUpdateSuite/TestStaleSpeculativeWorkflowTask_Fail_BecauseOfDifferentStartedId",
+      "action": "retain",
+      "current_names": [
+        "TestWorkflowUpdateSuite/TestStaleSpeculativeWorkflowTask_Fail_BecauseOfDifferentStartedId"
+      ],
+      "reason": "Uses CloseShard through clearUpdateRegistryAndAbortPendingUpdates, loseUpdateRegistryAndAbandonPendingUpdates, or closeShard to evict Temporal mutable state. The external engine has no equivalent shard-cache mutation.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowUpdateSuite/TestStaleSpeculativeWorkflowTask_Fail_BecauseOfDifferentStartTime",
+      "action": "retain",
+      "current_names": [
+        "TestWorkflowUpdateSuite/TestStaleSpeculativeWorkflowTask_Fail_BecauseOfDifferentStartTime"
+      ],
+      "reason": "Uses CloseShard through clearUpdateRegistryAndAbortPendingUpdates, loseUpdateRegistryAndAbandonPendingUpdates, or closeShard to evict Temporal mutable state. The external engine has no equivalent shard-cache mutation.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowUpdateSuite/TestStaleSpeculativeWorkflowTask_Fail_NewWorkflowTaskWith2Updates",
+      "action": "retain",
+      "current_names": [
+        "TestWorkflowUpdateSuite/TestStaleSpeculativeWorkflowTask_Fail_NewWorkflowTaskWith2Updates"
+      ],
+      "reason": "Uses CloseShard through clearUpdateRegistryAndAbortPendingUpdates, loseUpdateRegistryAndAbandonPendingUpdates, or closeShard to evict Temporal mutable state. The external engine has no equivalent shard-cache mutation.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowUpdateSuite/TestScheduledSpeculativeWorkflowTask_LostUpdate",
+      "action": "retain",
+      "current_names": [
+        "TestWorkflowUpdateSuite/TestScheduledSpeculativeWorkflowTask_LostUpdate"
+      ],
+      "reason": "Uses CloseShard through clearUpdateRegistryAndAbortPendingUpdates, loseUpdateRegistryAndAbandonPendingUpdates, or closeShard to evict Temporal mutable state. The external engine has no equivalent shard-cache mutation.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowUpdateSuite/TestStartedSpeculativeWorkflowTask_LostUpdate",
+      "action": "retain",
+      "current_names": [
+        "TestWorkflowUpdateSuite/TestStartedSpeculativeWorkflowTask_LostUpdate"
+      ],
+      "reason": "Uses CloseShard through clearUpdateRegistryAndAbortPendingUpdates, loseUpdateRegistryAndAbandonPendingUpdates, or closeShard to evict Temporal mutable state. The external engine has no equivalent shard-cache mutation.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowUpdateSuite/TestStartedSpeculativeWorkflowTask_TerminateWorkflow",
+      "action": "retain",
+      "current_names": [
+        "TestWorkflowUpdateSuite/TestStartedSpeculativeWorkflowTask_TerminateWorkflow"
+      ],
+      "reason": "Asserts internal DescribeMutableState.ExecutionInfo.CompletionEventBatchId. The engine admin projection does not expose Temporal event-batch persistence metadata.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowUpdateSuite/TestScheduledSpeculativeWorkflowTask_TerminateWorkflow",
+      "action": "retain",
+      "current_names": [
+        "TestWorkflowUpdateSuite/TestScheduledSpeculativeWorkflowTask_TerminateWorkflow"
+      ],
+      "reason": "Asserts internal DescribeMutableState.ExecutionInfo.CompletionEventBatchId. The engine admin projection does not expose Temporal event-batch persistence metadata.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowUpdateSuite/TestContinueAsNew_Suggestion",
+      "action": "remove",
+      "current_names": [],
+      "reason": "Both history.maxTotalUpdates and history.maxTotalUpdates.suggestContinueAsNewThreshold are Wired in the unchanged engine KEY_CLASSIFICATION.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestUpdateWithStartSuite/TestUpdateIsAbortedByClosingWorkflow",
+      "action": "narrow",
+      "current_names": [
+        "TestUpdateWithStartSuite/TestUpdateIsAbortedByClosingWorkflow/return_retryable_error_after_retry"
+      ],
+      "reason": "This subcase requires the in-process UpdateWithStartOnClosingWorkflowRetry hook to start another workflow during the server retry. The public retry-once sibling now runs.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestUpdateWithStartSuite/TestReturnUpdateRateLimitError",
+      "action": "remove",
+      "current_names": [],
+      "reason": "history.maxTotalUpdates is Wired in the unchanged engine KEY_CLASSIFICATION.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestUpdateWithStartSuite/TestReturnUpdateInFlightLimitError",
+      "action": "retain",
+      "current_names": [
+        "TestUpdateWithStartSuite/TestReturnUpdateInFlightLimitError"
+      ],
+      "reason": "Requires non-default history.maxInFlightUpdates; the unchanged engine conformance KEY_CLASSIFICATION marks it unwired. The override bridge cannot honor this setting.",
+      "source": "tests/update_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestTransientTaskSuite/TestTransientWorkflowTaskHistorySize",
+      "action": "remove",
+      "current_names": [],
+      "reason": "limit.historySize.suggestContinueAsNew is Wired in the unchanged engine KEY_CLASSIFICATION.",
+      "source": "tests/transient_task_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestMaxBufferedEventSuite/TestBufferedEventsMutableStateSizeLimit",
+      "action": "retain",
+      "current_names": [
+        "TestMaxBufferedEventSuite/TestBufferedEventsMutableStateSizeLimit"
+      ],
+      "reason": "Requires non-default limit.mutableStateSize.error; the unchanged engine conformance KEY_CLASSIFICATION marks it NotEnforced. The override bridge cannot honor this setting.",
+      "source": "tests/max_buffered_event_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestSizeLimitFunctionalSuite/TestTerminateWorkflowCausedByHistoryCountLimit",
+      "action": "retain",
+      "current_names": [
+        "TestSizeLimitFunctionalSuite/TestTerminateWorkflowCausedByHistoryCountLimit"
+      ],
+      "reason": "Requires non-default limit.historyCount.error; the unchanged engine conformance KEY_CLASSIFICATION marks it NotEnforced. The override bridge cannot honor this setting.",
+      "source": "tests/sizelimit_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestSizeLimitFunctionalSuite/TestWorkflowFailed_PayloadSizeTooLarge",
+      "action": "retain",
+      "current_names": [
+        "TestSizeLimitFunctionalSuite/TestWorkflowFailed_PayloadSizeTooLarge"
+      ],
+      "reason": "Requires non-default limit.blobSize.error; the unchanged engine conformance KEY_CLASSIFICATION marks it NotEnforced. The override bridge cannot honor this setting.",
+      "source": "tests/sizelimit_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestSizeLimitFunctionalSuite/TestTerminateWorkflowCausedByMsSizeLimit",
+      "action": "retain",
+      "current_names": [
+        "TestSizeLimitFunctionalSuite/TestTerminateWorkflowCausedByMsSizeLimit"
+      ],
+      "reason": "Requires non-default limit.mutableStateSize.error; the unchanged engine conformance KEY_CLASSIFICATION marks it NotEnforced. The override bridge cannot honor this setting.",
+      "source": "tests/sizelimit_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestSizeLimitFunctionalSuite/TestTerminateWorkflowCausedByHistorySizeLimit",
+      "action": "retain",
+      "current_names": [
+        "TestSizeLimitFunctionalSuite/TestTerminateWorkflowCausedByHistorySizeLimit"
+      ],
+      "reason": "Requires non-default limit.historySize.error; the unchanged engine conformance KEY_CLASSIFICATION marks it NotEnforced. The override bridge cannot honor this setting.",
+      "source": "tests/sizelimit_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestQueryWorkflowSuite/TestQueryWorkflow_NonStickyMultiPageHistory",
+      "action": "retain",
+      "current_names": [
+        "TestQueryWorkflowSuite/TestQueryWorkflow_NonStickyMultiPageHistory"
+      ],
+      "reason": "Requires non-default matching.historyMaxPageSize; the unchanged engine conformance KEY_CLASSIFICATION marks it unwired. The override bridge cannot honor this setting.",
+      "source": "tests/query_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestEagerWorkflowTestSuite/TestEagerWorkflowStart_TerminateDuplicate",
+      "action": "retain",
+      "current_names": [
+        "TestEagerWorkflowTestSuite/TestEagerWorkflowStart_TerminateDuplicate"
+      ],
+      "reason": "Requires non-default history.workflowIdReuseMinimalInterval; the unchanged engine conformance KEY_CLASSIFICATION marks it KernelExcluded. The override bridge cannot honor this setting.",
+      "source": "tests/eager_workflow_start_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestRawHistorySuite/TestGetWorkflowExecutionHistory_GetRawHistoryData",
+      "action": "retain",
+      "current_names": [
+        "TestRawHistorySuite/TestGetWorkflowExecutionHistory_GetRawHistoryData"
+      ],
+      "reason": "Requires non-default frontend.sendRawWorkflowHistory; the unchanged engine conformance KEY_CLASSIFICATION marks it unwired. The override bridge cannot honor this setting.",
+      "source": "tests/gethistory_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestDeploymentVersionSuite/TestForceCAN_WithOverrideState",
+      "action": "retain",
+      "current_names": [
+        "TestDeploymentVersionSuite/TestForceCAN_WithOverrideState"
+      ],
+      "reason": "Injects serialized internal worker-deployment entity-workflow state through ForceCANDeploymentSignalArgs.OverrideState; Tokeira owns a native deployment registry.",
+      "source": "tests/worker_deployment_version_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkerDeploymentSuite/TestForceCAN_WithOverrideState",
+      "action": "retain",
+      "current_names": [
+        "TestWorkerDeploymentSuite/TestForceCAN_WithOverrideState"
+      ],
+      "reason": "Injects serialized internal worker-deployment entity-workflow state through ForceCANDeploymentSignalArgs.OverrideState; Tokeira owns a native deployment registry.",
+      "source": "tests/worker_deployment_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkerDeploymentSuite/TestSetManagerIdentity_WithDeleteVersion",
+      "action": "retain",
+      "current_names": [
+        "TestWorkerDeploymentSuite/TestSetManagerIdentity_WithDeleteVersion"
+      ],
+      "reason": "Assumes two manager-identity operations consume the 500ms PollerHistoryTTL before deletion. The unchanged corpus has no wait for that TTL; fast native-registry operations can correctly reject deletion while the poller remains active.",
+      "source": "tests/worker_deployment_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestStandaloneActivityTestSuite/TestStart/RequestValidations/InputTooLarge",
+      "action": "retain",
+      "current_names": [
+        "TestStandaloneActivityTestSuite/TestStart/RequestValidations/InputTooLarge"
+      ],
+      "reason": "Requires limit.blobSize.error=1000; the unchanged engine conformance KEY_CLASSIFICATION marks this setting NotEnforced.",
+      "source": "tests/activity_standalone_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestStandaloneActivityTestSuite/TestRequestCancel/RequestValidations/ReasonTooLong",
+      "action": "retain",
+      "current_names": [
+        "TestStandaloneActivityTestSuite/TestRequestCancel/RequestValidations/ReasonTooLong"
+      ],
+      "reason": "Requires limit.blobSize.error=1000; the unchanged engine conformance KEY_CLASSIFICATION marks this setting NotEnforced.",
+      "source": "tests/activity_standalone_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestStandaloneActivityTestSuite/TestTerminate/RequestValidations/ReasonTooLong",
+      "action": "retain",
+      "current_names": [
+        "TestStandaloneActivityTestSuite/TestTerminate/RequestValidations/ReasonTooLong"
+      ],
+      "reason": "Requires limit.blobSize.error=1000; the unchanged engine conformance KEY_CLASSIFICATION marks this setting NotEnforced.",
+      "source": "tests/activity_standalone_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletion",
+      "action": "rename",
+      "current_names": [
+        "TestNexusWorkflowTestSuiteHSM/TestNexusOperationAsyncCompletion",
+        "TestNexusWorkflowTestSuiteCHASM/TestNexusOperationAsyncCompletion"
+      ],
+      "reason": "Decodes or manufactures Temporal CallbackTokenGenerator/NexusOperationCompletion tokens (directly or via generateValidCallbackToken), including internal HSM/CHASM references; the engine uses opaque operation-fenced tokens.",
+      "source": "tests/nexus_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionAfterReset",
+      "action": "remove",
+      "current_names": [],
+      "reason": "The test forwards the server-issued opaque callback header; it does not decode or mutate Temporal token internals.",
+      "source": "tests/nexus_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusWorkflowTestSuite/TestNexusOperationAsyncFailure",
+      "action": "remove",
+      "current_names": [],
+      "reason": "The test forwards the server-issued opaque callback header; it does not decode or mutate Temporal token internals.",
+      "source": "tests/nexus_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionErrors",
+      "action": "rename",
+      "current_names": [
+        "TestNexusWorkflowTestSuiteHSM/TestNexusOperationAsyncCompletionErrors",
+        "TestNexusWorkflowTestSuiteCHASM/TestNexusOperationAsyncCompletionErrors"
+      ],
+      "reason": "Decodes or manufactures Temporal CallbackTokenGenerator/NexusOperationCompletion tokens (directly or via generateValidCallbackToken), including internal HSM/CHASM references; the engine uses opaque operation-fenced tokens.",
+      "source": "tests/nexus_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionAuthErrors",
+      "action": "rename",
+      "current_names": [
+        "TestNexusWorkflowTestSuiteHSM/TestNexusOperationAsyncCompletionAuthErrors",
+        "TestNexusWorkflowTestSuiteCHASM/TestNexusOperationAsyncCompletionAuthErrors"
+      ],
+      "reason": "Decodes or manufactures Temporal CallbackTokenGenerator/NexusOperationCompletion tokens (directly or via generateValidCallbackToken), including internal HSM/CHASM references; the engine uses opaque operation-fenced tokens.",
+      "source": "tests/nexus_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionAuthErrorsNoIdentifier",
+      "action": "rename",
+      "current_names": [
+        "TestNexusWorkflowTestSuiteHSM/TestNexusOperationAsyncCompletionAuthErrorsNoIdentifier",
+        "TestNexusWorkflowTestSuiteCHASM/TestNexusOperationAsyncCompletionAuthErrorsNoIdentifier"
+      ],
+      "reason": "Decodes or manufactures Temporal CallbackTokenGenerator/NexusOperationCompletion tokens (directly or via generateValidCallbackToken), including internal HSM/CHASM references; the engine uses opaque operation-fenced tokens.",
+      "source": "tests/nexus_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionInternalAuth",
+      "action": "rename",
+      "current_names": [
+        "TestNexusWorkflowTestSuiteHSM/TestNexusOperationAsyncCompletionInternalAuth",
+        "TestNexusWorkflowTestSuiteCHASM/TestNexusOperationAsyncCompletionInternalAuth"
+      ],
+      "reason": "Requires the unwired component.nexusoperations.callbackURLTemplate override to install an internal callback host; the engine cannot deliver that topology override.",
+      "source": "tests/nexus_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusWorkflowTestSuite/TestNexusCallbackAfterCallerComplete",
+      "action": "remove",
+      "current_names": [],
+      "reason": "A deferred public callback-lifecycle gap is baseline data, not an out-of-surface exclusion.",
+      "source": "tests/nexus_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusWorkflowTestSuite/TestNexusOperationAsyncCompletionBeforeStart",
+      "action": "remove",
+      "current_names": [],
+      "reason": "A deferred public inbound completion gap is baseline data, not an out-of-surface exclusion.",
+      "source": "tests/nexus_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusWorkflowTestSuite/TestNexusOperationSyncCompletion",
+      "action": "rename",
+      "current_names": [
+        "TestNexusWorkflowTestSuiteHSM/TestNexusOperationSyncCompletion",
+        "TestNexusWorkflowTestSuiteCHASM/TestNexusOperationSyncCompletion"
+      ],
+      "reason": "Inspects internal DescribeMutableState.SubStateMachinesByType to verify HSM deletion; Tokeira has no Temporal HSM persistence representation.",
+      "source": "tests/nexus_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNexusWorkflowTestSuite/TestNexusOperationSystemEndpoint",
+      "action": "remove",
+      "current_names": [],
+      "reason": "The reserved endpoint is exercised through public workflow commands; any remaining gap must be visible in the Nexus baseline.",
+      "source": "tests/nexus_workflow_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowTaskTestSuite/TestWorkflowTaskHeartbeatingWithEmptyResult",
+      "action": "retain",
+      "current_names": [
+        "TestWorkflowTaskTestSuite/TestWorkflowTaskHeartbeatingWithEmptyResult"
+      ],
+      "reason": "Requires non-default history.workflowTaskHeartbeatTimeout; the unchanged engine conformance KEY_CLASSIFICATION marks it unwired. The override bridge cannot honor this setting.",
+      "source": "tests/workflow_task_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowResetTestSuite/TestResetWorkflowWithOptionsUpdate",
+      "action": "remove",
+      "current_names": [],
+      "reason": "The committed conformanceMatchingClient now translates CheckTaskQueueVersionMembership through public DescribeWorkerDeploymentVersion; the old nil-client reason is obsolete.",
+      "source": "tests/workflow_reset_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestWorkflowResetTestSuite/TestBatchResetWithOptionsUpdate",
+      "action": "remove",
+      "current_names": [],
+      "reason": "The committed conformanceMatchingClient now translates CheckTaskQueueVersionMembership through public DescribeWorkerDeploymentVersion; the old nil-client reason is obsolete.",
+      "source": "tests/workflow_reset_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNamespaceSuite/Test_NamespaceDelete_WithMissingWorkflows",
+      "action": "retain",
+      "current_names": [
+        "TestNamespaceSuite/Test_NamespaceDelete_WithMissingWorkflows"
+      ],
+      "reason": "Calls ExecutionManager.DeleteWorkflowExecution to remove mutable state while retaining stale visibility rows; this persistence-corruption setup is unavailable through the public API.",
+      "source": "tests/namespace_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestNamespaceSuite/Test_NamespaceDelete_Protected",
+      "action": "retain",
+      "current_names": [
+        "TestNamespaceSuite/Test_NamespaceDelete_Protected"
+      ],
+      "reason": "Requires non-default worker.protectedNamespaces; the unchanged engine conformance KEY_CLASSIFICATION marks it unwired. The override bridge cannot honor this setting.",
+      "source": "tests/namespace_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestTaskQueueSuite/TestTaskDispatchLatencyMetric_WorkflowAndActivity",
+      "action": "retain",
+      "current_names": [
+        "TestTaskQueueSuite/TestTaskDispatchLatencyMetric_WorkflowAndActivity"
+      ],
+      "reason": "Requires internal matching partition/forwarding state and hooks (DescribeTaskQueuePartition, MatchingForwardTaskDelay, or per-partition dispatch-rate overrides); these Temporal topology controls are not public API behavior.",
+      "source": "tests/task_queue_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestTaskQueueSuite/TestTaskDispatchLatencyMetric_Query",
+      "action": "retain",
+      "current_names": [
+        "TestTaskQueueSuite/TestTaskDispatchLatencyMetric_Query"
+      ],
+      "reason": "Requires internal matching partition/forwarding state and hooks (DescribeTaskQueuePartition, MatchingForwardTaskDelay, or per-partition dispatch-rate overrides); these Temporal topology controls are not public API behavior.",
+      "source": "tests/task_queue_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestTaskQueueSuite/TestTaskDispatchLatencyMetric_Nexus",
+      "action": "retain",
+      "current_names": [
+        "TestTaskQueueSuite/TestTaskDispatchLatencyMetric_Nexus"
+      ],
+      "reason": "Requires internal matching partition/forwarding state and hooks (DescribeTaskQueuePartition, MatchingForwardTaskDelay, or per-partition dispatch-rate overrides); these Temporal topology controls are not public API behavior.",
+      "source": "tests/task_queue_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestTaskQueueSuite/TestTaskQueueRateLimit",
+      "action": "retain",
+      "current_names": [
+        "TestTaskQueueSuite/TestTaskQueueRateLimit"
+      ],
+      "reason": "Requires internal matching partition/forwarding state and hooks (DescribeTaskQueuePartition, MatchingForwardTaskDelay, or per-partition dispatch-rate overrides); these Temporal topology controls are not public API behavior.",
+      "source": "tests/task_queue_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestFairnessSuite/TestMigration_FromClassic",
+      "action": "retain",
+      "current_names": [
+        "TestFairnessSuite/TestMigration_FromClassic"
+      ],
+      "reason": "Asserts draining/active physical-queue status during Temporal classic/new/fair matcher persistence migration. Tokeira delivery modes do not implement that internal migration topology.",
+      "source": "tests/priority_fairness_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestFairnessSuite/TestMigration_FromPri",
+      "action": "retain",
+      "current_names": [
+        "TestFairnessSuite/TestMigration_FromPri"
+      ],
+      "reason": "Asserts draining/active physical-queue status during Temporal classic/new/fair matcher persistence migration. Tokeira delivery modes do not implement that internal migration topology.",
+      "source": "tests/priority_fairness_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestFairnessSuite/TestMigration_FromFair",
+      "action": "retain",
+      "current_names": [
+        "TestFairnessSuite/TestMigration_FromFair"
+      ],
+      "reason": "Asserts draining/active physical-queue status during Temporal classic/new/fair matcher persistence migration. Tokeira delivery modes do not implement that internal migration topology.",
+      "source": "tests/priority_fairness_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestFairnessAutoEnableSuite/TestMigration_FromClassic",
+      "action": "retain",
+      "current_names": [
+        "TestFairnessAutoEnableSuite/TestMigration_FromClassic"
+      ],
+      "reason": "Asserts draining/active physical-queue status during Temporal classic/new/fair matcher persistence migration. Tokeira delivery modes do not implement that internal migration topology.",
+      "source": "tests/priority_fairness_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestFairnessAutoEnableSuite/TestMigration_FromPri",
+      "action": "retain",
+      "current_names": [
+        "TestFairnessAutoEnableSuite/TestMigration_FromPri"
+      ],
+      "reason": "Asserts draining/active physical-queue status during Temporal classic/new/fair matcher persistence migration. Tokeira delivery modes do not implement that internal migration topology.",
+      "source": "tests/priority_fairness_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestFairnessAutoEnableSuite/TestMigration_FromFair",
+      "action": "retain",
+      "current_names": [
+        "TestFairnessAutoEnableSuite/TestMigration_FromFair"
+      ],
+      "reason": "Asserts draining/active physical-queue status during Temporal classic/new/fair matcher persistence migration. Tokeira delivery modes do not implement that internal migration topology.",
+      "source": "tests/priority_fairness_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestFairnessSuite/TestUpdateWorkflowExecutionOptions_InvalidatesPendingTask",
+      "action": "retain",
+      "current_names": [
+        "TestFairnessSuite/TestUpdateWorkflowExecutionOptions_InvalidatesPendingTask"
+      ],
+      "reason": "Asserts internal matching-client request/failure metrics and a Go concrete error type; an external engine cannot emit Temporal in-process client calls.",
+      "source": "tests/priority_fairness_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestPrioritySuite/TestStickyInteraction_SinglePartition",
+      "action": "remove",
+      "current_names": [],
+      "reason": "Both activity and sticky cases now call newTestEnv/NewEnv and register separate namespaces (tests/priority_fairness_test.go); fixed workflow IDs cannot collide between those namespaces.",
+      "source": "tests/priority_fairness_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestScheduleV1/TestRefresh",
+      "action": "retain",
+      "current_names": [
+        "TestScheduleV1/TestRefresh"
+      ],
+      "reason": "Reads or signals the internal temporal-sys-scheduler workflow, including history markers/NextTimeCache; Tokeira owns a native schedule store.",
+      "source": "tests/schedule_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestScheduleV1/TestNextTimeCache",
+      "action": "retain",
+      "current_names": [
+        "TestScheduleV1/TestNextTimeCache"
+      ],
+      "reason": "Reads or signals the internal temporal-sys-scheduler workflow, including history markers/NextTimeCache; Tokeira owns a native schedule store.",
+      "source": "tests/schedule_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestScheduleV1/TestCreatesCHASMSentinel",
+      "action": "retain",
+      "current_names": [
+        "TestScheduleV1/TestCreatesCHASMSentinel"
+      ],
+      "reason": "Uses the internal SchedulerClient to inspect CHASM migration sentinels; Tokeira schedules have no Temporal entity-workflow/sentinel representation.",
+      "source": "tests/schedule_test.go @ v1.32.0"
+    },
+    {
+      "previous_name": "TestScheduleV1/TestSkipsCHASMSentinelWhenDisabled",
+      "action": "retain",
+      "current_names": [
+        "TestScheduleV1/TestSkipsCHASMSentinelWhenDisabled"
+      ],
+      "reason": "Uses the internal SchedulerClient to inspect CHASM migration sentinels; Tokeira schedules have no Temporal entity-workflow/sentinel representation.",
+      "source": "tests/schedule_test.go @ v1.32.0"
+    }
+  ]
+}

@@ -44,6 +44,9 @@ type (
 		clients
 		server temporal.Server
 
+		// External defaults survive test cleanup and are released with the cluster.
+		conformanceCleanups []func()
+
 		logger       log.Logger
 		serverConfig *config.Config
 
@@ -304,6 +307,13 @@ func (c *temporalImpl) Start() error {
 }
 
 func (c *temporalImpl) Stop() error {
+	if conformanceFrontendAddr() != "" {
+		unregisterConformanceAuthorizationHost(c)
+		for i := len(c.conformanceCleanups) - 1; i >= 0; i-- {
+			c.conformanceCleanups[i]()
+		}
+		c.conformanceCleanups = nil
+	}
 	var errs []error
 	if c.server != nil {
 		errs = append(errs, c.server.Stop())
@@ -453,7 +463,12 @@ func (c *temporalImpl) overrideDynamicConfigForClusterLifetime(name dynamicconfi
 
 // overrideDynamicConfigForTest overrides a dynamic config value for the duration of the test.
 func (c *temporalImpl) overrideDynamicConfigForTest(t *testing.T, name dynamicconfig.Key, value any) func() {
-	cleanup := c.dcClient.PartialOverrideValue(name, value)
+	inProcess := c.dcClient.PartialOverrideValue(name, value)
+	controlCleanup := deliverConformanceDynamicConfigOverride(t, name, value)
+	cleanup := func() {
+		controlCleanup()
+		inProcess()
+	}
 	t.Cleanup(cleanup)
 	return cleanup
 }

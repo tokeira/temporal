@@ -1,0 +1,352 @@
+package testcore
+
+import (
+	"regexp"
+	"strings"
+	"testing"
+)
+
+// matchesSkip mirrors `go test`'s positional skip matching: split the test
+// identifier and the skip pattern on unbracketed '/', and require each pattern
+// element to match the corresponding identifier element (extra pattern elements
+// past the identifier's depth are ignored). It lets the test assert which leaves
+// the generated regexp would skip without spawning a real `go test`.
+func matchesSkip(t *testing.T, pattern, name string) bool {
+	t.Helper()
+	if pattern == "" {
+		return false
+	}
+	pParts := strings.Split(pattern, "/")
+	nParts := strings.Split(name, "/")
+	for i, n := range nParts {
+		if i >= len(pParts) {
+			break
+		}
+		re := regexp.MustCompile(pParts[i])
+		if !re.MatchString(n) {
+			return false
+		}
+	}
+	return true
+}
+
+func TestConformanceSkipRegexp_StandaloneActivity(t *testing.T) {
+	const suite = "TestStandaloneActivityTestSuite"
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern == "" {
+		t.Fatalf("expected a skip regexp for %s", suite)
+	}
+
+	skipped := []string{
+		suite + "/TestStart/RequestValidations/InputTooLarge",
+		suite + "/TestRequestCancel/RequestValidations/ReasonTooLong",
+		suite + "/TestTerminate/RequestValidations/ReasonTooLong",
+	}
+	for _, name := range skipped {
+		if !matchesSkip(t, pattern, name) {
+			t.Errorf("expected %q to be skipped by %q", name, pattern)
+		}
+	}
+
+	// Sibling validations and happy paths must keep running.
+	kept := []string{
+		suite + "/TestStart/RequestValidations/RequestIDTooLong",
+		suite + "/TestStart/RequestValidations/IdentityTooLong",
+		suite + "/TestStart/RequestValidations/SearchAttributesInvalid",
+		suite + "/TestRequestCancel/RequestValidations/EmptyActivityID",
+		suite + "/TestTerminate/RequestValidations/ActivityIDTooLong",
+		suite + "/TestComplete/ByToken",
+	}
+	for _, name := range kept {
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
+func TestConformanceSkipRegexp_EagerWorkflow(t *testing.T) {
+	const suite = "TestEagerWorkflowTestSuite"
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern == "" {
+		t.Fatalf("expected a skip regexp for %s", suite)
+	}
+
+	if name := suite + "/TestEagerWorkflowStart_TerminateDuplicate"; !matchesSkip(t, pattern, name) {
+		t.Errorf("expected %q to be skipped by %q", name, pattern)
+	}
+
+	for _, name := range []string{
+		suite + "/TestEagerWorkflowStart_StartNew",
+		suite + "/TestEagerWorkflowStart_RetryTaskAfterTimeout",
+		suite + "/TestEagerWorkflowStart_RetryStartAfterTimeout",
+		suite + "/TestEagerWorkflowStart_RetryStartImmediately",
+		suite + "/TestEagerWorkflowStart_WorkflowRetry",
+	} {
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
+func TestConformanceSkipRegexp_WFTFailureReportedProblems(t *testing.T) {
+	const suite = "TestWFTFailureReportedProblemsTestSuite"
+	// The reported-problems suite is fully in scope. The dynamic-config bridge
+	// (tokeira_dynamic_config_bridge.go) delivers the reported-problems threshold override to
+	// the out-of-process tokeirad, so DynamicConfigChanges — which mutates it 0->2 mid-run —
+	// runs instead of being skipped. With no leaf registered, the skip regexp is empty.
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern != "" {
+		t.Fatalf("expected no skip regexp for %s (all leaves in scope), got %q", suite, pattern)
+	}
+
+	// Every leaf — including the formerly-skipped DynamicConfigChanges — must run.
+	for _, name := range []string{
+		suite + "/TestWFTFailureReportedProblems_SetAndClear",
+		suite + "/TestWFTFailureReportedProblems_NotClearedBySignals",
+		suite + "/TestWFTFailureReportedProblems_SetAndClear_FailAfterActivity",
+		suite + "/TestWFTFailureReportedProblems_DynamicConfigChanges",
+	} {
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
+func TestConformanceSkipRegexp_TaskQueueMetrics(t *testing.T) {
+	const suite = "TestTaskQueueSuite"
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern == "" {
+		t.Fatalf("expected a skip regexp for %s", suite)
+	}
+
+	for _, leaf := range []string{
+		"TestTaskDispatchLatencyMetric_WorkflowAndActivity",
+		"TestTaskDispatchLatencyMetric_Query",
+		"TestTaskDispatchLatencyMetric_Nexus",
+		"TestTaskQueueRateLimit",
+	} {
+		name := suite + "/" + leaf
+		if !matchesSkip(t, pattern, name) {
+			t.Errorf("expected %q to be skipped by %q", name, pattern)
+		}
+	}
+
+	for _, leaf := range []string{
+		"TestTaskQueueRateLimit_UpdateFromWorkerConfigAndAPI",
+		"TestUpdateAndDescribeTaskQueueConfig",
+		"TestShutdownWorkerCancelsOutstandingPolls",
+	} {
+		name := suite + "/" + leaf
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
+func TestConformanceSkipRegexp_WorkerDeploymentInternals(t *testing.T) {
+	const suite = "TestWorkerDeploymentSuite"
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern == "" {
+		t.Fatalf("expected a skip regexp for %s", suite)
+	}
+
+	for _, leaf := range []string{
+		"TestForceCAN_WithOverrideState",
+		"TestSetManagerIdentity_WithDeleteVersion",
+	} {
+		name := suite + "/" + leaf
+		if !matchesSkip(t, pattern, name) {
+			t.Errorf("expected %q to be skipped by %q", name, pattern)
+		}
+	}
+
+	for _, leaf := range []string{
+		"TestForceCAN_NoOpenWFS",
+		"TestSetManagerIdentity_RW",
+		"TestSetManagerIdentity_WithSetRampSetCurrent",
+	} {
+		name := suite + "/" + leaf
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
+func TestConformanceSkipRegexp_AdvancedVisibilityWorkerVersioning(t *testing.T) {
+	for _, suite := range []string{"TestAdvancedVisibilitySuite", "TestAdvancedVisibilitySuiteLegacy"} {
+		pattern := ConformanceSkipRegexp(suite)
+		if pattern == "" {
+			t.Fatalf("expected a skip regexp for %s", suite)
+		}
+
+		for _, leaf := range []string{
+			"Test_BuildIdIndexedOnCompletion_VersionedWorker",
+			"Test_BuildIdIndexedOnReset",
+			"Test_BuildIdIndexedOnRetry",
+			"TestWorkerTaskReachability_ByBuildId",
+			"TestWorkerTaskReachability_ByBuildId_NotInNamespace",
+			"TestWorkerTaskReachability_ByBuildId_NotInTaskQueue",
+			"TestWorkerTaskReachability_EmptyBuildIds",
+			"TestWorkerTaskReachability_TooManyBuildIds",
+			"TestWorkerTaskReachability_Unversioned_InNamespace",
+			"TestWorkerTaskReachability_Unversioned_InTaskQueue",
+			"TestBuildIdScavenger_DeletesUnusedBuildId",
+		} {
+			name := suite + "/" + leaf
+			if !matchesSkip(t, pattern, name) {
+				t.Errorf("expected %q to be skipped by %q", name, pattern)
+			}
+		}
+
+		// WorkerVersionStamp and BuildIds field fidelity remain in-surface even
+		// though the deprecated V1/V2 enabled paths are excluded.
+		name := suite + "/Test_BuildIdIndexedOnCompletion_UnversionedWorker"
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
+func TestConformanceSkipRegexp_NexusV1Versioning(t *testing.T) {
+	for _, suite := range []string{
+		"TestNexusApiTestSuiteWithLegacyErrorPaths",
+		"TestNexusApiTestSuiteWithTemporalFailures",
+	} {
+		pattern := ConformanceSkipRegexp(suite)
+		name := suite + "/TestNexusStartOperation_WithNamespaceAndTaskQueue_SupportsVersioning"
+		if !matchesSkip(t, pattern, name) {
+			t.Errorf("expected %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
+func TestConformanceSkipRegexp_SizeLimit(t *testing.T) {
+	const suite = "TestSizeLimitFunctionalSuite"
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern == "" {
+		t.Fatalf("expected a skip regexp for %s", suite)
+	}
+
+	for _, name := range []string{
+		suite + "/TestTerminateWorkflowCausedByHistoryCountLimit",
+		suite + "/TestWorkflowFailed_PayloadSizeTooLarge",
+		suite + "/TestTerminateWorkflowCausedByMsSizeLimit",
+		suite + "/TestTerminateWorkflowCausedByHistorySizeLimit",
+	} {
+		if !matchesSkip(t, pattern, name) {
+			t.Errorf("expected %q to be skipped by %q", name, pattern)
+		}
+	}
+
+	if name := suite + "/TestUnregisteredSibling"; matchesSkip(t, pattern, name) {
+		t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+	}
+}
+
+func TestConformanceSkipRegexp_Namespace(t *testing.T) {
+	const suite = "TestNamespaceSuite"
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern == "" {
+		t.Fatalf("expected a skip regexp for %s", suite)
+	}
+
+	for _, leaf := range []string{
+		"Test_NamespaceDelete_WithMissingWorkflows",
+		"Test_NamespaceDelete_Protected",
+	} {
+		name := suite + "/" + leaf
+		if !matchesSkip(t, pattern, name) {
+			t.Errorf("expected %q to be skipped by %q", name, pattern)
+		}
+	}
+
+	for _, leaf := range []string{
+		"Test_NamespaceDelete_Empty",
+		"Test_NamespaceDelete_OverrideDelay",
+		"Test_NamespaceDelete_Empty_WithID",
+		"Test_NamespaceDelete_WithNameAndID",
+		"Test_NamespaceDelete_WithWorkflows",
+		"Test_NamespaceDelete_CrossNamespaceChild",
+	} {
+		name := suite + "/" + leaf
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
+func TestConformanceSkipRegexp_ScheduleV1Internals(t *testing.T) {
+	const suite = "TestScheduleV1"
+	pattern := ConformanceSkipRegexp(suite)
+	if pattern == "" {
+		t.Fatalf("expected a skip regexp for %s", suite)
+	}
+
+	for _, leaf := range []string{
+		"TestRefresh",
+		"TestNextTimeCache",
+		"TestCreatesCHASMSentinel",
+		"TestSkipsCHASMSentinelWhenDisabled",
+	} {
+		name := suite + "/" + leaf
+		if !matchesSkip(t, pattern, name) {
+			t.Errorf("expected %q to be skipped by %q", name, pattern)
+		}
+	}
+
+	for _, leaf := range []string{
+		"TestBasics",
+		"TestRateLimit",
+		"TestLastCompletionAndError",
+		"TestUpdateScheduleMemoRejected",
+	} {
+		name := suite + "/" + leaf
+		if matchesSkip(t, pattern, name) {
+			t.Errorf("did not expect %q to be skipped by %q", name, pattern)
+		}
+	}
+}
+
+func TestConformanceSkipRegexp_UnknownEntrypointIsEmpty(t *testing.T) {
+	if got := ConformanceSkipRegexp("TestNoSuchSuite"); got != "" {
+		t.Errorf("expected empty skip regexp for an unregistered entrypoint, got %q", got)
+	}
+}
+
+func TestConformanceSkipRegexp_CallbacksRemainActive(t *testing.T) {
+	for _, suite := range []string{"TestCallbacksSuiteCHASM", "TestCallbacksSuiteHSM"} {
+		if got := ConformanceSkipRegexp(suite); got != "" {
+			t.Errorf("%s must run at the v1.32 stock gate, got %q", suite, got)
+		}
+	}
+}
+
+func TestConformanceSkipRegexp_ClosingWorkflowRetainsPublicRetry(t *testing.T) {
+	pattern := ConformanceSkipRegexp("TestUpdateWithStartSuite")
+	if matchesSkip(t, pattern, "TestUpdateWithStartSuite/TestUpdateIsAbortedByClosingWorkflow/retry_request_once_when_workflow_was_not_started") {
+		t.Fatal("public retry must run")
+	}
+	if !matchesSkip(t, pattern, "TestUpdateWithStartSuite/TestUpdateIsAbortedByClosingWorkflow/return_retryable_error_after_retry") {
+		t.Fatal("internal retry hook subcase must be classified")
+	}
+	if _, ok := conformanceSkipReason("TestUpdateWithStartSuite/TestReturnUpdateInFlightLimitError"); !ok {
+		t.Fatal("shallower method exclusion must still be enforced by NewEnv")
+	}
+}
+
+func TestConformanceSkipRegistryRestoresSupportedSurfaces(t *testing.T) {
+	for _, name := range []string{
+		"TestPrioritySuite/TestStickyInteraction_SinglePartition",
+		"TestWorkflowUpdateSuite/TestContinueAsNew_Suggestion",
+		"TestUpdateWithStartSuite/TestReturnUpdateRateLimitError",
+		"TestTransientTaskSuite/TestTransientWorkflowTaskHistorySize",
+		"TestWorkflowResetTestSuite/TestResetWorkflowWithOptionsUpdate",
+		"TestWorkflowResetTestSuite/TestBatchResetWithOptionsUpdate",
+		"TestNexusWorkflowTestSuiteHSM/TestNexusOperationAsyncFailure",
+		"TestNexusWorkflowTestSuiteCHASM/TestNexusOperationAsyncCompletionAfterReset",
+	} {
+		if reason, ok := conformanceSkipReason(name); ok {
+			t.Errorf("restored test %s still excluded: %s", name, reason)
+		}
+	}
+}

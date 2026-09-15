@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/dgryski/go-farm"
 	"github.com/stretchr/testify/require"
@@ -26,6 +27,7 @@ import (
 	"go.temporal.io/server/common/headers"
 	"go.temporal.io/server/common/log"
 	"go.temporal.io/server/common/namespace"
+	"go.temporal.io/server/common/testing/protorequire"
 	"go.temporal.io/server/common/testing/taskpoller"
 	"go.temporal.io/server/common/testing/testcontext"
 	"go.temporal.io/server/common/testing/testhooks"
@@ -67,6 +69,8 @@ type TestEnv struct {
 	// share the same *FunctionalTestBase cluster.
 	// TODO: remove once all tests are migrated to TestEnv (and no longer use FunctionalTestBase directly).
 	*require.Assertions
+	// Pooled bases are not bound to the current leaf; use its assertion context.
+	protorequire.ProtoAssertions
 
 	Logger log.Logger
 
@@ -244,6 +248,7 @@ func WithDynamicConfig(setting dynamicconfig.GenericSetting, value any) TestOpti
 // NewEnv creates a new test environment with access to a Temporal cluster.
 func NewEnv(t *testing.T, opts ...TestOption) *TestEnv {
 	t.Helper()
+	maybeSkipTestForConformance(t)
 
 	// Check test sharding early, before any expensive operations.
 	checkTestShard(t)
@@ -304,6 +309,7 @@ func NewEnv(t *testing.T, opts ...TestOption) *TestEnv {
 	env := &TestEnv{
 		FunctionalTestBase: base,
 		Assertions:         require.New(t),
+		ProtoAssertions:    protorequire.New(t),
 		cluster:            cluster,
 		nsName:             ns,
 		nsID:               nsID,
@@ -321,6 +327,26 @@ func NewEnv(t *testing.T, opts ...TestOption) *TestEnv {
 			t.Fatal(err)
 		}
 	})
+
+	if conformanceFrontendAddr() != "" && options.dedicatedCluster {
+		// A real dedicated cluster owns an isolated Nexus endpoint catalog. Shape-2
+		// deliberately shares Tokeira's one cluster-global catalog, so release only
+		// this leaf's namespace-targeted endpoints before the pooled cluster slot is
+		// handed to a sibling leaf. Tokeira keeps its production global-uniqueness
+		// contract; this restores the isolation supplied by the corpus topology.
+		targetNamespace := ns.String()
+		t.Cleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			if err := cleanupConformanceNexusEndpointsForNamespace(
+				cleanupCtx,
+				env.OperatorClient(),
+				targetNamespace,
+			); err != nil {
+				t.Errorf("Failed to clean up conformance Nexus endpoints: %v", err)
+			}
+		})
+	}
 
 	if options.disableTestloggerFailure {
 		tl, ok := base.Logger.(*testlogger.TestLogger)
