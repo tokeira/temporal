@@ -14,45 +14,23 @@ import (
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/server/common/testing/await"
 	"go.temporal.io/server/tests/testcore"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-// TestTokeiraConformance_BasicWorkflowLifecycle is the Tier-2 (Shape-2) first
-// milestone: it proves the onebox seam's wire path end-to-end by driving one
-// basic WorkflowService lifecycle against a real, externally-launched `tokeirad`
-// frontend BEFORE the full Temporal corpus or large files like
-// versioning_3_test.go are attempted (see temporal-functional-conformance design,
-// "Initial bring-up runs a small, high-signal subset").
-//
-// Deliberately standalone — NOT a FunctionalTestBase suite. FunctionalTestBase's
-// setupCluster registers its namespace by writing directly to
-// testCluster.testBase.MetadataManager.CreateNamespace
-// (functional_test_base.go RegisterNamespace), i.e. Temporal's own persistence
-// layer. Under Shape-2 `tokeirad` is the backend over the wire and the onebox
-// boots no Temporal persistence, so that direct write is invisible to `tokeirad`.
-// This test therefore registers its namespace through `tokeirad`'s frontend
-// RegisterNamespace RPC and talks to the frontend WorkflowService client directly,
-// which is exactly the surface the corpus reaches through FrontendClient().
-//
-// The test t.Skip's when TOKEIRA_BIN is unset (via StartTokeirad), so it is safe
-// to commit and no-ops on a checkout without a `tokeirad` binary present.
+// TestTokeiraConformance_BasicWorkflowLifecycle proves namespace registration and
+// workflow completion over the external frontend. The test environment owns the
+// authorization callback listener required by conformance-mode engines, including
+// when the run-all executor supplies an existing engine. Without that listener,
+// an unavailable authorization bridge correctly makes namespace registration fail
+// closed before the lifecycle can be exercised.
 func TestTokeiraConformance_BasicWorkflowLifecycle(t *testing.T) {
 	proc := testcore.StartTokeirad(t)
+	t.Cleanup(func() { proc.Stop(t) })
 	proc.WaitReady(t, 30*time.Second)
-	defer proc.Stop(t)
-
-	// Talk to tokeirad directly via the frontend WorkflowService client. This
-	// milestone proves the wire path to tokeirad; the onebox seam itself is
-	// exercised by the run-all harness later, so SetFrontendEnv is not required
-	// here.
-	conn, err := grpc.NewClient(proc.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err, "dial tokeirad frontend %q", proc.Addr)
-	defer func() { _ = conn.Close() }()
-	client := workflowservice.NewWorkflowServiceClient(conn)
+	proc.SetFrontendEnv(t)
+	client := testcore.NewEnv(t).FrontendClient()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -61,7 +39,7 @@ func TestTokeiraConformance_BasicWorkflowLifecycle(t *testing.T) {
 
 	// Register the namespace through the frontend RPC (not a direct persistence
 	// write). Tolerate AlreadyExists so re-runs against a pinned address are idempotent.
-	_, err = client.RegisterNamespace(ctx, &workflowservice.RegisterNamespaceRequest{
+	_, err := client.RegisterNamespace(ctx, &workflowservice.RegisterNamespaceRequest{
 		Namespace:                        namespace,
 		WorkflowExecutionRetentionPeriod: durationpb.New(24 * time.Hour),
 	})
