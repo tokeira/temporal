@@ -1047,5 +1047,95 @@
       "reason": "Uses the internal SchedulerClient to inspect CHASM migration sentinels; Tokeira schedules have no Temporal entity-workflow/sentinel representation.",
       "source": "tests/schedule_test.go @ v1.32.0"
     }
+  ],
+  "post_baseline_addenda": [
+    {
+      "decision_date": "2026-09-15",
+      "engine_commit": "d019b6058d713f1fa4345ad3a2f31617de66e2f0",
+      "previous_fork_commit": "4d71235efae67869a5c2e75fa2836765cf9fd347",
+      "entries": [
+        {
+          "previous_name": null,
+          "action": "add",
+          "current_names": [
+            "TestActivityApiPause_AttributesToActivityInContextMetadata"
+          ],
+          "reason": "Enables the unwired startup-only frontend.contextMetadataSetTrailer flag, whose stock default is false; the frontend captures it when constructing the context-metadata interceptor.",
+          "source": "tests/activity_api_pause_test.go:990; service/frontend/fx.go:525; common/dynamicconfig/constants.go:869 @ v1.32.0"
+        },
+        {
+          "previous_name": null,
+          "action": "add",
+          "current_names": [
+            "TestTaskQueueStats_Pri_Suite/TestAddMultipleTasks_ValidateStats_Cached"
+          ],
+          "reason": "Sets matching.TaskQueueInfoByBuildIdTTL to one hour and requires stale cached backlog statistics after draining tasks; this tests Temporal's internal statistics-cache lifetime.",
+          "source": "tests/task_queue_stats_test.go:137-183 @ v1.32.0"
+        },
+        {
+          "previous_name": null,
+          "action": "add",
+          "current_names": [
+            "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/NoTaskForwardNoPollForwardForceAsyncSuite"
+          ],
+          "reason": "Forces asynchronous matching with MatchingDisableSyncMatch; the nested statistics cases depend on an in-process matching hook.",
+          "source": "tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:58-73 @ v1.32.0"
+        },
+        {
+          "previous_name": null,
+          "action": "add",
+          "current_names": [
+            "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/ForceTaskForwardNoPollForwardAllowSyncSuite"
+          ],
+          "reason": "Forces writes to matching partition 11 with MatchingLBForceWritePartition in a 13-partition topology; the nested statistics cases depend on internal routing hooks.",
+          "source": "tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0"
+        },
+        {
+          "previous_name": null,
+          "action": "add",
+          "current_names": [
+            "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/ForceTaskForwardNoPollForwardForceAsyncSuite"
+          ],
+          "reason": "Forces writes to matching partition 11 and disables synchronous matching with in-process hooks in a 13-partition topology.",
+          "source": "tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0"
+        },
+        {
+          "previous_name": null,
+          "action": "add",
+          "current_names": [
+            "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/NoTaskForwardForcePollForwardAllowSyncSuite"
+          ],
+          "reason": "Forces polls to matching partition 5 with MatchingLBForceReadPartition in a 13-partition topology; the nested statistics cases depend on internal routing hooks.",
+          "source": "tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0"
+        },
+        {
+          "previous_name": null,
+          "action": "add",
+          "current_names": [
+            "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/NoTaskForwardForcePollForwardForceAsyncSuite"
+          ],
+          "reason": "Forces polls to matching partition 5 and disables synchronous matching with in-process hooks in a 13-partition topology.",
+          "source": "tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0"
+        },
+        {
+          "previous_name": null,
+          "action": "add",
+          "current_names": [
+            "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/ForceTaskForwardForcePollForwardAllowSyncSuite"
+          ],
+          "reason": "Forces writes to matching partition 11 and polls to partition 5 with in-process routing hooks in a 13-partition topology.",
+          "source": "tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0"
+        },
+        {
+          "previous_name": null,
+          "action": "add",
+          "current_names": [
+            "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/ForceTaskForwardForcePollForwardForceAsyncSuite"
+          ],
+          "reason": "Forces writes to matching partition 11, polls to partition 5, and asynchronous matching with in-process hooks in a 13-partition topology.",
+          "source": "tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0"
+        }
+      ]
+    }
   ]
 }

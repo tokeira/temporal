@@ -149,7 +149,7 @@ func (s *HttpApiTestSuite) runHTTPAPIBasicsTest(
 		env,
 		http.StatusOK,
 		// Our version of gRPC gateway only supports integer enums in queries :-(
-		"/namespaces/"+env.Namespace().String()+"/workflows/"+workflowID+"/history?historyEventFilterType=2",
+		"/namespaces/"+env.Namespace().String()+"/workflows/"+workflowID+"/history?historyEventFilterType=2&waitNewEvent=true",
 		contentType,
 	)
 	verifyHistory(s, respBody)

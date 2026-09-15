@@ -4,14 +4,17 @@
 > [`temporalio/temporal`](https://github.com/temporalio/temporal), pinned at Temporal
 > `v1.32.0` to match Tokeira's `TEMPORAL_SERVER_TARGET` target. **It is not a fork of the
 > Temporal server for production use.** Its sole purpose is to run Temporal's own
-> functional test corpus, unmodified, against Tokeira — a Temporal-compatible durable
+> functional test corpus against Tokeira — a Temporal-compatible durable
 > execution engine — as Tier 2 of Tokeira's conformance model.
 >
 > **What is changed here:** the `tests/testcore` cluster factory, client adapters,
 > namespace setup, override lifecycle, skip registry, and the metrics capture helper
 > connect the corpus to an external `tokeirad`. The `tests/tokeira_conformance_*`
-> tooling runs and reports the corpus with Go `go1.26.8`. **Upstream test bodies
-> are unchanged.** Every inherited exclusion is reviewed in the
+> tooling runs and reports the corpus with Go `go1.26.8`. The sole upstream-body
+> exception adds `waitNewEvent=true` to the close-history HTTP GET in
+> `tests/http_api_test.go`, because signal admission does not guarantee workflow
+> closure; this synchronization is carried forward from the v1.31.0 fork and
+> remains to be offered upstream. Every inherited exclusion is reviewed in the
 > [skip audit](tests/testcore/tokeira_conformance_skip_audit.json).
 >
 > Run all entrypoints with `TOKEIRA_BIN=/path/to/tokeirad GOTOOLCHAIN=go1.26.8

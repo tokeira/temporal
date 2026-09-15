@@ -350,3 +350,49 @@ func TestConformanceSkipRegistryRestoresSupportedSurfaces(t *testing.T) {
 		}
 	}
 }
+
+func TestConformanceSkipRegistryTaskQueueStatisticsScope(t *testing.T) {
+	const suite = "TestTaskQueueStats_Pri_Suite"
+	pattern := ConformanceSkipRegexp(suite)
+	for _, behavior := range AllMatchingBehaviors() {
+		internal := behavior.ForceTaskForward || behavior.ForcePollForward || behavior.ForceAsync
+		for _, leaf := range []string{
+			"TestMultipleTasks_ValidateStats",
+			"TestCurrentVersionAbsorbsUnversionedBacklog_NoRamping",
+			"TestRampingAndCurrentAbsorbUnversionedBacklog",
+			"TestCurrentAbsorbsUnversionedBacklog_WhenRampingToUnversioned",
+			"TestRampingAbsorbsUnversionedBacklog_WhenCurrentIsUnversioned",
+			"TestInactiveVersionDoesNotAbsorbUnversionedBacklog",
+		} {
+			name := suite + "/TestVersioningSuite/" + behavior.Name() + "Suite/" + leaf
+			if _, skipped := conformanceSkipReason(name); skipped != internal {
+				t.Errorf("registry classification for %s: skipped=%v, internal=%v", name, skipped, internal)
+			}
+			if skipped := matchesSkip(t, pattern, name); skipped != internal {
+				t.Errorf("runner classification for %s: skipped=%v, internal=%v", name, skipped, internal)
+			}
+		}
+	}
+	for _, leaf := range []string{"TestDescribeTaskQueue_NonRoot", "TestNoTasks_ValidateStats"} {
+		name := suite + "/" + leaf
+		if _, skipped := conformanceSkipReason(name); skipped || matchesSkip(t, pattern, name) {
+			t.Errorf("public statistics case must remain active: %s", name)
+		}
+	}
+	// The runner filters deeper scenario groups; NewEnv must enforce this method exclusion.
+	if _, skipped := conformanceSkipReason(suite + "/TestAddMultipleTasks_ValidateStats_Cached"); !skipped {
+		t.Fatal("cache-lifetime case must be excluded by the environment hook")
+	}
+}
+
+func TestConformanceSkipRegistryContextMetadataTrailerScope(t *testing.T) {
+	const name = "TestActivityApiPause_AttributesToActivityInContextMetadata"
+	if _, skipped := conformanceSkipReason(name); !skipped || !matchesSkip(t, ConformanceSkipRegexp(name), name) {
+		t.Fatal("startup-only context-metadata trailer case must be excluded")
+	}
+	for _, publicName := range []string{"TestActivityApiPauseClientTestSuite", name + "StockDefault"} {
+		if _, skipped := conformanceSkipReason(publicName); skipped {
+			t.Errorf("exact exclusion must not filter %s", publicName)
+		}
+	}
+}

@@ -8,8 +8,9 @@ import (
 
 // Conformance skip registry.
 //
-// The Tier-2 functional conformance harness replays Temporal's UNMODIFIED Go
-// corpus over the real gRPC wire against an external `tokeirad`. A small number
+// The Tier-2 functional conformance harness replays Temporal's Go corpus, with
+// the sole HTTP synchronization disclosed in README.md, against an external
+// `tokeirad` over the real gRPC wire. A small number
 // of corpus tests cannot run in that mode because they require in-process
 // internals, excluded implementation modes, or an override key Tokeira cannot
 // honour without violating the kernel boundary. Supported runtime/edge overrides
@@ -32,6 +33,15 @@ type conformanceSkip struct {
 }
 
 var conformanceSkips = []conformanceSkip{
+	{nameContains: "TestActivityApiPause_AttributesToActivityInContextMetadata", reason: "Enables the unwired startup-only frontend.contextMetadataSetTrailer flag, whose stock default is false; the frontend captures it when constructing the context-metadata interceptor. (tests/activity_api_pause_test.go:990; service/frontend/fx.go:525; common/dynamicconfig/constants.go:869 @ v1.32.0)"},
+	{nameContains: "TestTaskQueueStats_Pri_Suite/TestAddMultipleTasks_ValidateStats_Cached", reason: "Sets matching.TaskQueueInfoByBuildIdTTL to one hour and requires stale cached backlog statistics after draining tasks; this tests Temporal's internal statistics-cache lifetime. (tests/task_queue_stats_test.go:137-183 @ v1.32.0)"},
+	{nameContains: "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/NoTaskForwardNoPollForwardForceAsyncSuite", reason: "Forces asynchronous matching with MatchingDisableSyncMatch; the nested statistics cases depend on an in-process matching hook. (tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:58-73 @ v1.32.0)"},
+	{nameContains: "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/ForceTaskForwardNoPollForwardAllowSyncSuite", reason: "Forces writes to matching partition 11 with MatchingLBForceWritePartition in a 13-partition topology; the nested statistics cases depend on internal routing hooks. (tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0)"},
+	{nameContains: "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/ForceTaskForwardNoPollForwardForceAsyncSuite", reason: "Forces writes to matching partition 11 and disables synchronous matching with in-process hooks in a 13-partition topology. (tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0)"},
+	{nameContains: "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/NoTaskForwardForcePollForwardAllowSyncSuite", reason: "Forces polls to matching partition 5 with MatchingLBForceReadPartition in a 13-partition topology; the nested statistics cases depend on internal routing hooks. (tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0)"},
+	{nameContains: "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/NoTaskForwardForcePollForwardForceAsyncSuite", reason: "Forces polls to matching partition 5 and disables synchronous matching with in-process hooks in a 13-partition topology. (tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0)"},
+	{nameContains: "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/ForceTaskForwardForcePollForwardAllowSyncSuite", reason: "Forces writes to matching partition 11 and polls to partition 5 with in-process routing hooks in a 13-partition topology. (tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0)"},
+	{nameContains: "TestTaskQueueStats_Pri_Suite/TestVersioningSuite/ForceTaskForwardForcePollForwardForceAsyncSuite", reason: "Forces writes to matching partition 11, polls to partition 5, and asynchronous matching with in-process hooks in a 13-partition topology. (tests/task_queue_stats_test.go:189-197; tests/testcore/matching_behavior.go:39-73 @ v1.32.0)"},
 	{nameContains: "TestVersioning3FunctionalSuite/TestUnpinnedTask_OldDeployment", reason: "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent. (tests/versioning_3_test.go @ v1.32.0)"},
 	{nameContains: "TestVersioning3FunctionalSuite/TestTransitionFromWft_Sticky", reason: "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent. (tests/versioning_3_test.go @ v1.32.0)"},
 	{nameContains: "TestVersioning3FunctionalSuite/TestTransitionFromWft_NoSticky", reason: "Installs or rolls back internal task-queue routing revisions through SyncDeploymentUserData/GetTaskQueueUserData, including helpers in tests/versioning_test_env.go; these topology mutations have no public API equivalent. (tests/versioning_3_test.go @ v1.32.0)"},
