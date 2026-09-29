@@ -36,8 +36,8 @@ import (
 const tokeiraMetricsAddrEnv = "TOKEIRA_CONFORMANCE_METRICS_ADDR"
 
 // Shape-2's dedicated clusters share one out-of-process metrics registry. Serialize
-// capture windows so a metric for a deliberately nonexistent namespace can be assigned
-// honestly to the request that emitted it: unlike successful requests, that namespace
+// capture windows from different clusters so metrics for a deliberately nonexistent
+// namespace can be attributed: unlike successful requests, that namespace
 // can never appear in the cluster's registered-namespace set. The corpus already treats
 // each CaptureMetricsHandler as cluster-local; this mutex recreates that isolation at the
 // scrape seam without changing any test body or fabricating a sample.
@@ -95,19 +95,35 @@ type scrapedCounter struct {
 // The final scrape is taken exactly once, at whichever of StopCapture/Snapshot fires first.
 func newTokeiraMetricsScrapeSource(metricsURL string, namespaces *conformanceNamespaceSet) func() (func(), func() metricstest.CaptureSnapshot) {
 	client := &http.Client{Timeout: scrapeTimeout}
+	// One cluster may hold overlapping captures: Update-with-Start opens another
+	// capture before a failed request's capture is stopped during test cleanup
+	// (tests/update_workflow_test.go:4982, 5805-5807 @ v1.32.0). Share the global
+	// isolation lease within this factory, releasing it only after every window
+	// freezes. Capture windows from other clusters remain excluded. Acquiring the
+	// global lock under windowsMu is safe only at zero: no active window from this
+	// factory then needs windowsMu to release that lock.
+	var windowsMu sync.Mutex
+	windows := 0
 	return func() (func(), func() metricstest.CaptureSnapshot) {
-		tokeiraMetricsCaptureMu.Lock()
+		windowsMu.Lock()
+		if windows == 0 {
+			tokeiraMetricsCaptureMu.Lock()
+		}
+		windows++
+		windowsMu.Unlock()
 		baseline := scrapeRenamedCounters(client, metricsURL)
 		var frozen map[string]scrapedCounter // nil until the window is frozen
-		var released bool
+		var freezeOnce sync.Once
 		freeze := func() {
-			if frozen == nil {
+			freezeOnce.Do(func() {
 				frozen = scrapeRenamedCounters(client, metricsURL)
-			}
-			if !released {
-				released = true
-				tokeiraMetricsCaptureMu.Unlock()
-			}
+				windowsMu.Lock()
+				windows--
+				if windows == 0 {
+					tokeiraMetricsCaptureMu.Unlock()
+				}
+				windowsMu.Unlock()
+			})
 		}
 		onStop := func() { freeze() }
 		onSnapshot := func() metricstest.CaptureSnapshot {
@@ -274,8 +290,8 @@ func synthesizeDelta(baseline, final map[string]scrapedCounter, namespaces *conf
 	for key, fin := range final {
 		if ns, ok := fin.labels["namespace"]; ok && namespaces != nil && !namespaces.contains(ns) {
 			// A namespace-not-found request cannot have been registered in the
-			// owning cluster by definition. Capture windows are serialized above,
-			// so this exact terminal outcome belongs to the active capture; all
+			// owning cluster by definition. Clusters' capture windows are serialized
+			// above, so this terminal outcome is included in the active cluster; all
 			// other foreign namespace series remain excluded.
 			if fin.labels["outcome"] != "namespace_not_found" {
 				continue
