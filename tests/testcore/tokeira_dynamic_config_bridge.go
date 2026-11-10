@@ -1,43 +1,32 @@
 package testcore
 
-// Tokeira Tier-2 conformance: dynamic-config control bridge.
-//
-// Under Shape-2 the backend `tokeirad` runs out-of-process, so the corpus's
-// OverrideDynamicConfig writes to the in-process onebox MemoryClient — which the
-// external engine never reads. This bridge closes that gap for the keys tokeira
-// genuinely honours: it delivers each override to `tokeirad`'s conformance
-// control service (a Connect-RPC surface mounted only in a `--features
-// conformance` build, on a separate loopback listener) and returns a cleanup
-// that clears it.
-//
-// It is honest, not faking. tokeira's control service is the arbiter: it accepts
-// only wired, non-kernel keys whose declared value type matches, and rejects
-// every other key (unimplemented / invalid_argument). On rejection — or when no
-// control listener was wired, or the value type is not encodable — the bridge
-// logs and returns a no-op. It NEVER fails the test on delivery: a corpus test
-// that REQUIRES an unhonoured override is skip-registered
-// (tokeira_conformance_skip.go), and the config-as-constant convention covers
-// keys whose v1.31.0 default already matches tokeira's. So a silently-dropped
-// override can only surface as an honest test failure, never a fabricated pass.
-//
-// The proving consumer is the reported-problems threshold
-// (system.numConsecutiveWorkflowTaskProblemsToTriggerSearchAttribute), which
-// TestWFTFailureReportedProblemsTestSuite sets to 2 in SetupTest and mutates
-// 0->2 mid-run in TestWFTFailureReportedProblems_DynamicConfigChanges; tokeira
-// reads it live at Describe (spec .kiro/specs/conformance-config-override/).
+// Shape-2 sends harness defaults and test overrides to the external control service.
+// Unhonoured settings never skip tests. Fixed-prefix lines report each refused harness
+// key once per cluster and each unhonoured test override with its full test name, key,
+// value, and control answer. Test overrides equal to the encoded harness value need no
+// test label. Suite settings are applied and checked separately for each test. Only
+// delivered overrides register cleanup, which restores an honoured harness value or
+// clears the key and fails the test on error.
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"math"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"go.temporal.io/server/common/dynamicconfig"
+	"go.temporal.io/server/components/nexusoperations"
+	runner "go.temporal.io/server/tests/tokeira_conformance_runner"
 )
 
 // tokeiraControlAddrEnv carries the tokeirad conformance control-service host:port from the
@@ -57,56 +46,178 @@ func conformanceControlAddr() string {
 	return strings.TrimSpace(os.Getenv(tokeiraControlAddrEnv))
 }
 
-// deliverConformanceDynamicConfigOverride delivers an OverrideDynamicConfig(name, value) to the
-// out-of-process tokeirad via its Connect-RPC control service and returns a cleanup that clears
-// the override. It bridges the in-process MemoryClient write, which the external engine cannot see.
-//
-// It returns a no-op cleanup, never failing the test, when: not in conformance mode / no control
-// listener; the value type is not encodable; or tokeira does not honour the key (unimplemented /
-// invalid_argument) or the RPC otherwise fails. A test that REQUIRES an unhonoured override is
-// skip-registered, and config-as-constant covers keys whose default already matches tokeira's.
-func deliverConformanceDynamicConfigOverride(t *testing.T, name dynamicconfig.Key, value any) func() {
-	noop := func() {}
-	addr := conformanceControlAddr()
-	if addr == "" {
-		return noop
+type conformanceConfigTest interface {
+	Name() string
+	Logf(string, ...any)
+	Errorf(string, ...any)
+	Cleanup(func())
+}
+
+type conformanceDynamicConfigBridge struct {
+	addr           string
+	call           func(string, string, string) error
+	defaults       map[dynamicconfig.Key]any
+	harnessOnce    sync.Once
+	harnessMu      sync.Mutex
+	harnessErrors  map[dynamicconfig.Key]error
+	suiteT         *testing.T
+	suiteOverrides map[dynamicconfig.Key]any
+}
+
+func newConformanceDynamicConfigBridge(addr, frontend string) *conformanceDynamicConfigBridge {
+	defaults := maps.Clone(dynamicConfigOverrides)
+	defaults[nexusoperations.CallbackURLTemplate.Key()] = "http://" + frontend + "/namespaces/{{.NamespaceName}}/nexus/callback"
+	defaults[dynamicconfig.MatchingNumTaskqueueReadPartitions.Key()] = 1
+	defaults[dynamicconfig.MatchingNumTaskqueueWritePartitions.Key()] = 1
+	return &conformanceDynamicConfigBridge{
+		addr:           addr,
+		call:           postConformanceControl,
+		defaults:       defaults,
+		harnessErrors:  make(map[dynamicconfig.Key]error),
+		suiteOverrides: make(map[dynamicconfig.Key]any),
 	}
-	keyName := name.String()
+}
+
+func (b *conformanceDynamicConfigBridge) set(key dynamicconfig.Key, value any) error {
+	if b.addr == "" {
+		return errors.New("no control listener configured while running against tokeirad")
+	}
 	encoded, ok := encodeDynamicConfigOverrideValue(value)
 	if !ok {
-		t.Logf("tokeira conformance: dynamic-config key %q value type %T not encodable for control "+
-			"delivery; relying on skip registry / config-as-constant", keyName, value)
-		return noop
+		return fmt.Errorf("value of type %T cannot be encoded", value)
 	}
-	setBody := fmt.Sprintf(`{"key":%s,"value":%s}`, strconv.Quote(keyName), encoded)
-	if err := postConformanceControl(addr, "SetDynamicConfigOverride", setBody); err != nil {
-		t.Logf("tokeira conformance: dynamic-config override %q not delivered (%v); relying on skip "+
-			"registry / config-as-constant", keyName, err)
-		return noop
-	}
-	return func() {
-		clearBody := fmt.Sprintf(`{"key":%s}`, strconv.Quote(keyName))
-		if err := postConformanceControl(addr, "ClearDynamicConfigOverride", clearBody); err != nil {
-			t.Logf("tokeira conformance: clearing dynamic-config override %q failed: %v", keyName, err)
+	body := fmt.Sprintf(`{"key":%s,"value":%s}`, strconv.Quote(key.String()), encoded)
+	return b.call(b.addr, "SetDynamicConfigOverride", body)
+}
+
+func (b *conformanceDynamicConfigBridge) restore(t conformanceConfigTest, key dynamicconfig.Key) func() {
+	return sync.OnceFunc(func() {
+		var err error
+		if value, ok := b.defaults[key]; ok && b.harnessError(key) == nil {
+			err = b.set(key, value)
+		} else {
+			err = b.call(b.addr, "ClearDynamicConfigOverride", fmt.Sprintf(`{"key":%s}`, strconv.Quote(key.String())))
 		}
+		if err != nil {
+			t.Errorf("tokeira conformance: cleanup of dynamic-config key %q failed: %v", key, err)
+		}
+	})
+}
+
+func (b *conformanceDynamicConfigBridge) applyHarness(t conformanceConfigTest) {
+	b.harnessOnce.Do(func() {
+		for _, key := range conformanceConfigKeys(b.defaults) {
+			if err := b.set(key, b.defaults[key]); err != nil {
+				b.recordHarnessError(t, key, b.defaults[key], err)
+			}
+		}
+	})
+}
+
+func (b *conformanceDynamicConfigBridge) harnessError(key dynamicconfig.Key) error {
+	b.harnessMu.Lock()
+	defer b.harnessMu.Unlock()
+	return b.harnessErrors[key]
+}
+
+func (b *conformanceDynamicConfigBridge) recordHarnessError(t conformanceConfigTest, key dynamicconfig.Key, value any, err error) {
+	b.harnessMu.Lock()
+	_, reported := b.harnessErrors[key]
+	if !reported {
+		b.harnessErrors[key] = err
 	}
+	b.harnessMu.Unlock()
+	if !reported {
+		t.Logf(runner.DynamicConfigHarnessLogFormat, key.String(), fmt.Sprint(value), err.Error())
+	}
+}
+
+func (b *conformanceDynamicConfigBridge) deliver(t conformanceConfigTest, key dynamicconfig.Key, value any) func() {
+	if err := b.set(key, value); err != nil {
+		if !b.matchesHarness(key, value) {
+			t.Logf(runner.DynamicConfigTestLogFormat, t.Name(), key.String(), fmt.Sprint(value), err.Error())
+		}
+		return func() {}
+	}
+	cleanup := b.restore(t, key)
+	t.Cleanup(cleanup)
+	return cleanup
+}
+
+func (b *conformanceDynamicConfigBridge) matchesHarness(key dynamicconfig.Key, value any) bool {
+	harness, exists := b.defaults[key]
+	if !exists {
+		return false
+	}
+	encoded, ok := encodeDynamicConfigOverrideValue(value)
+	harnessEncoded, harnessOK := encodeDynamicConfigOverrideValue(harness)
+	return ok && harnessOK && encoded == harnessEncoded
+}
+
+func (b *conformanceDynamicConfigBridge) applySuite(t conformanceConfigTest) {
+	if b == nil {
+		return
+	}
+	for _, key := range conformanceConfigKeys(b.suiteOverrides) {
+		b.deliver(t, key, b.suiteOverrides[key])
+	}
+}
+
+func (c *TemporalImpl) overrideHarnessDynamicConfig(t *testing.T, key dynamicconfig.Key, value any) func() {
+	if c.conformanceConfig == nil {
+		return c.overrideDynamicConfig(t, key, value)
+	}
+	b := c.conformanceConfig
+	local := c.dcClient.PartialOverrideValue(key, value)
+	cleanup := sync.OnceFunc(local)
+	t.Cleanup(cleanup)
+	if b.harnessError(key) != nil {
+		return cleanup
+	}
+	if err := b.set(key, value); err != nil {
+		b.recordHarnessError(t, key, value, err)
+		return cleanup
+	}
+	remote := b.restore(t, key)
+	t.Cleanup(remote)
+	return func() {
+		remote()
+		cleanup()
+	}
+}
+
+func (c *TemporalImpl) deliverConformanceDynamicConfigOverride(t *testing.T, key dynamicconfig.Key, value any) func() {
+	b := c.conformanceConfig
+	if b == nil {
+		return func() {}
+	}
+	if t == b.suiteT {
+		previous, exists := b.suiteOverrides[key]
+		b.suiteOverrides[key] = value
+		cleanup := sync.OnceFunc(func() {
+			if exists {
+				b.suiteOverrides[key] = previous
+			} else {
+				delete(b.suiteOverrides, key)
+			}
+		})
+		t.Cleanup(cleanup)
+		return cleanup
+	}
+	return b.deliver(t, key, value)
 }
 
 // encodeDynamicConfigOverrideValue maps a Go dynamic-config value to the JSON body of the
 // DynamicConfigValue oneof. Proto3 JSON encodes int64 (int_value, duration_nanos) as a string,
 // matching tokeira's buffa serializer. Composite values are serialized into json_value; the wired
 // consumer owns their setting-specific schema. Returns ok=false only when JSON cannot represent the
-// value, so the caller logs and no-ops rather than inventing one.
+// value, so the caller can report the undeliverable override.
 func encodeDynamicConfigOverrideValue(value any) (string, bool) {
 	switch v := value.(type) {
 	case []dynamicconfig.ConstrainedValue:
-		// TestEnv wraps namespace-scoped settings in one constrained value so
-		// shared-onebox tests remain isolated. The out-of-process conformance
-		// runner executes one suite serially and provisions a fresh tokeirad, so
-		// the namespace constraint is already supplied by process isolation; only
-		// the wrapped scalar needs to cross the control wire. Multiple constrained
-		// alternatives remain deliberately unsupported because flattening them
-		// would invent precedence semantics.
+		// The control store is process-wide: a single constraint can carry its
+		// scalar value, but parallel tests still share that value. Multiple
+		// alternatives cannot be flattened without inventing precedence.
 		if len(v) != 1 {
 			return "", false
 		}
@@ -118,8 +229,14 @@ func encodeDynamicConfigOverrideValue(value any) (string, bool) {
 	case int64:
 		return fmt.Sprintf(`{"intValue":%s}`, strconv.Quote(strconv.FormatInt(v, 10))), true
 	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return "", false
+		}
 		return fmt.Sprintf(`{"doubleValue":%s}`, strconv.FormatFloat(v, 'g', -1, 64)), true
 	case float32:
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			return "", false
+		}
 		return fmt.Sprintf(`{"doubleValue":%s}`, strconv.FormatFloat(float64(v), 'g', -1, 32)), true
 	case bool:
 		return fmt.Sprintf(`{"boolValue":%t}`, v), true
@@ -169,4 +286,17 @@ func postConformanceControl(addr, method, body string) error {
 		return fmt.Errorf("connect status %s: %s", envelope.Code, envelope.Message)
 	}
 	return fmt.Errorf("http %d", resp.StatusCode)
+}
+
+func withHarnessDynamicConfig(setting dynamicconfig.GenericSetting, value any) TestOption {
+	return func(options *testOptions) {
+		WithDynamicConfig(setting, value)(options)
+		options.dynamicConfigSettings[len(options.dynamicConfigSettings)-1].harness = true
+	}
+}
+
+func conformanceConfigKeys(values map[dynamicconfig.Key]any) []dynamicconfig.Key {
+	return slices.SortedFunc(maps.Keys(values), func(a, b dynamicconfig.Key) int {
+		return strings.Compare(a.String(), b.String())
+	})
 }

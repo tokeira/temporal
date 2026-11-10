@@ -94,6 +94,7 @@ type testOptions struct {
 }
 
 type dynamicConfigOverride struct {
+	harness bool
 	setting dynamicconfig.GenericSetting
 	value   any
 }
@@ -158,7 +159,9 @@ func NewEnv(t *testing.T, opts ...TestOption) *TestEnv {
 	if options.dedicatedCluster && len(options.dynamicConfigSettings) > 0 {
 		startupConfig = make(map[dynamicconfig.Key]any, len(options.dynamicConfigSettings))
 		for _, override := range options.dynamicConfigSettings {
-			startupConfig[override.setting.Key()] = override.value
+			if !override.harness || conformanceFrontendAddr() == "" {
+				startupConfig[override.setting.Key()] = override.value
+			}
 		}
 	}
 
@@ -217,13 +220,14 @@ func NewEnv(t *testing.T, opts ...TestOption) *TestEnv {
 
 	// Set Nexus callback URL now that we have the cluster's HTTP address. Note that we set
 	// a default for the global config here so callers that rely on this can still use a shared cluster.
-	env.FunctionalTestBase.OverrideDynamicConfig(
-		nexusoperations.CallbackURLTemplate,
+	env.cluster.host.overrideHarnessDynamicConfig(t,
+		nexusoperations.CallbackURLTemplate.Key(),
 		"http://"+env.HttpAPIAddress()+"/namespaces/{{.NamespaceName}}/nexus/callback")
 
-	// For shared clusters, apply all dynamic config settings as overrides.
-	if !options.dedicatedCluster && len(options.dynamicConfigSettings) > 0 {
-		for _, override := range options.dynamicConfigSettings {
+	for _, override := range options.dynamicConfigSettings {
+		if override.harness {
+			env.cluster.host.overrideHarnessDynamicConfig(t, override.setting.Key(), override.value)
+		} else if !options.dedicatedCluster {
 			env.OverrideDynamicConfig(override.setting, override.value)
 		}
 	}

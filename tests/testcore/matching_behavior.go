@@ -40,13 +40,13 @@ func (b MatchingBehavior) Options() []TestOption {
 	var opts []TestOption
 	if b.ForceTaskForward || b.ForcePollForward {
 		opts = append(opts,
-			WithDynamicConfig(dynamicconfig.MatchingNumTaskqueueReadPartitions, 13),
-			WithDynamicConfig(dynamicconfig.MatchingNumTaskqueueWritePartitions, 13),
+			withHarnessDynamicConfig(dynamicconfig.MatchingNumTaskqueueReadPartitions, 13),
+			withHarnessDynamicConfig(dynamicconfig.MatchingNumTaskqueueWritePartitions, 13),
 		)
 	} else {
 		opts = append(opts,
-			WithDynamicConfig(dynamicconfig.MatchingNumTaskqueueReadPartitions, 1),
-			WithDynamicConfig(dynamicconfig.MatchingNumTaskqueueWritePartitions, 1),
+			withHarnessDynamicConfig(dynamicconfig.MatchingNumTaskqueueReadPartitions, 1),
+			withHarnessDynamicConfig(dynamicconfig.MatchingNumTaskqueueWritePartitions, 1),
 		)
 	}
 	return opts

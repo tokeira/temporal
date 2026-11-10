@@ -86,6 +86,7 @@ type (
 		MockAdminClient                 map[string]adminservice.AdminServiceClient
 		FaultInjection                  *config.FaultInjection
 		DynamicConfigOverrides          map[dynamicconfig.Key]any
+		conformanceSuiteT               *testing.T
 		EnableMTLS                      bool
 		EnableMetricsCapture            bool
 		SpanExporters                   map[telemetry.SpanExporterType]sdktrace.SpanExporter
