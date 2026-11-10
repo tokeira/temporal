@@ -1,4 +1,4 @@
-package runner
+package runner //nolint:revive // the package's existing name
 
 import (
 	"bufio"

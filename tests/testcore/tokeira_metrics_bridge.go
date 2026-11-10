@@ -289,7 +289,7 @@ func synthesizeDelta(baseline, final map[string]scrapedCounter, namespaces *conf
 		if delta <= 0 {
 			continue
 		}
-		for i := 0; i < delta; i++ {
+		for range delta {
 			snap[fin.temporalName] = append(snap[fin.temporalName], &metricstest.CapturedRecording{
 				Value: int64(1),
 				Tags:  fin.labels,
