@@ -66,20 +66,23 @@ func TestConformanceSkipRegexp_StandaloneActivity(t *testing.T) {
 
 func TestConformanceSkipRegexp_EagerWorkflow(t *testing.T) {
 	const suite = "TestEagerWorkflowTestSuite"
+	// The eager-start suite is fully in scope. TerminateDuplicate asks for a
+	// workflow-id reuse interval of 0, which tokeirad refuses, so it runs without
+	// it, labelled. It doesn't need the override: v1.31.0 applies that interval to
+	// a restart only when history.enableWorkflowIdReuseStartTimeValidation is on,
+	// and it is off by default. With no leaf registered, the skip regexp is empty.
 	pattern := ConformanceSkipRegexp(suite)
-	if pattern == "" {
-		t.Fatalf("expected a skip regexp for %s", suite)
+	if pattern != "" {
+		t.Fatalf("expected no skip regexp for %s (all leaves in scope), got %q", suite, pattern)
 	}
 
-	if name := suite + "/TestEagerWorkflowStart_TerminateDuplicate"; !matchesSkip(t, pattern, name) {
-		t.Errorf("expected %q to be skipped by %q", name, pattern)
-	}
-
+	// Every leaf, including the formerly skipped TerminateDuplicate, must run.
 	for _, name := range []string{
 		suite + "/TestEagerWorkflowStart_StartNew",
 		suite + "/TestEagerWorkflowStart_RetryTaskAfterTimeout",
 		suite + "/TestEagerWorkflowStart_RetryStartAfterTimeout",
 		suite + "/TestEagerWorkflowStart_RetryStartImmediately",
+		suite + "/TestEagerWorkflowStart_TerminateDuplicate",
 		suite + "/TestEagerWorkflowStart_WorkflowRetry",
 	} {
 		if matchesSkip(t, pattern, name) {
