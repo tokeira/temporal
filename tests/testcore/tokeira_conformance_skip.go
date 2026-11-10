@@ -618,17 +618,6 @@ var conformanceSkips = []conformanceSkip{
 			"is deferred and tracked separately — not a public-HTTP-Nexus conformance claim",
 	},
 	{
-		nameContains: "TestWorkflowTaskTestSuite/TestWorkflowTaskHeartbeatingWithEmptyResult",
-		reason: "OUT OF SCOPE (owner decision 2026-07-03): depends on " +
-			"OverrideDynamicConfig(WorkflowTaskHeartbeatTimeout=5s) vs the 30m default " +
-			"(respondworkflowtaskcompleted/api.go:298, constants.go:2427). Per the conformance " +
-			"config-as-constant convention the 30m default is not operationally wrong for tokeira, so the " +
-			"heartbeat timeout does not earn a deployment knob merely to pass a test — same class as the " +
-			"MaxCallbacksPerWorkflow OverrideDynamicConfig skip. Permanent skip, not implemented (no " +
-			"config knob, no PendingWorkflowTask.original_scheduled_at). Spec .kiro/specs/transient-wft/ " +
-			"Item C; raised in docs/HANDOVER-transient-wft.md (C).",
-	},
-	{
 		nameContains: "TestWorkflowResetTestSuite/TestResetWorkflowWithOptionsUpdate",
 		reason: "reset-with-worker-deployment-versioning: startVersionedPollerAndValidate drives a " +
 			"VERSIONED poller and asserts task-queue version membership via the matching-service RPC " +

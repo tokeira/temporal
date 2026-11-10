@@ -183,6 +183,13 @@ func runCorpus(addr, metricsAddr, controlAddr, authCallbackURL, resultsPath stri
 
 	fmt.Printf("tokeira-conformance-runall: corpus complete — %d entrypoints ran, %d failed. results: %s\n",
 		ran, failed, resultsPath)
+	var dynamicConfig runner.DynamicConfigReport
+	if _, err := results.Seek(0, io.SeekStart); err != nil {
+		fmt.Fprintf(os.Stderr, "tokeira-conformance-runall: read dynamic-config summary: %v\n", err)
+	} else if err := dynamicConfig.ReadJSON(results); err != nil {
+		fmt.Fprintf(os.Stderr, "tokeira-conformance-runall: incomplete dynamic-config summary: %v\n", err)
+	}
+	fmt.Print(dynamicConfig.Summary())
 	return nil
 }
 
@@ -238,7 +245,7 @@ func runEntrypoint(addr, metricsAddr, controlAddr, authCallbackURL, name string,
 		cmd.Env = append(cmd.Env, runner.MetricsAddrEnv+"="+metricsAddr)
 	}
 	// Hand the corpus tokeirad's control-service address so the dynamic-config bridge can deliver
-	// OverrideDynamicConfig; omitted when unknown (the bridge then no-ops).
+	// OverrideDynamicConfig; omitted when unknown (the bridge then logs unhonoured settings).
 	if controlAddr != "" {
 		cmd.Env = append(cmd.Env, runner.ControlAddrEnv+"="+controlAddr)
 	}

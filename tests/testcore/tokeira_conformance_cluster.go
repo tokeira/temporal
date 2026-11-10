@@ -221,25 +221,15 @@ func newConformanceCluster(
 	}
 	registerConformanceAuthorizationHost(host, namespaces)
 
-	// The standard onebox constructor applies the corpus-wide ClientSuiteLimit
-	// defaults while assembling its TemporalImpl. Shape-2 bypasses that
-	// constructor, so deliver the four pending-command limits that the external
-	// server actually supports. Forwarding every onebox default would only
-	// generate unsupported-key noise for unrelated in-process service knobs.
-	clientSuiteLimitKeys := []dynamicconfig.Key{
-		dynamicconfig.NumPendingChildExecutionsLimitError.Key(),
-		dynamicconfig.NumPendingActivitiesLimitError.Key(),
-		dynamicconfig.NumPendingCancelRequestsLimitError.Key(),
-		dynamicconfig.NumPendingSignalsLimitError.Key(),
+	host.conformanceConfig = newConformanceDynamicConfigBridge(conformanceControlAddr(), addr)
+	host.conformanceConfig.suiteT = clusterConfig.conformanceSuiteT
+	host.conformanceConfig.applyHarness(t)
+	for _, key := range conformanceConfigKeys(host.conformanceConfig.defaults) {
+		cleanup := host.dcClient.PartialOverrideValue(key, host.conformanceConfig.defaults[key])
+		t.Cleanup(cleanup)
 	}
-	for _, key := range clientSuiteLimitKeys {
-		host.overrideDynamicConfig(t, key, dynamicConfigOverrides[key])
-	}
-	// Suite-scoped overrides remain independent of those corpus-wide defaults.
-	// Cleanup is tied to the suite's testing.T, preserving the ordinary onebox
-	// lifetime.
-	for key, value := range clusterConfig.DynamicConfigOverrides {
-		host.overrideDynamicConfig(t, key, value)
+	for _, key := range conformanceConfigKeys(clusterConfig.DynamicConfigOverrides) {
+		host.overrideDynamicConfig(t, key, clusterConfig.DynamicConfigOverrides[key])
 	}
 
 	// Tier-2 metrics bridge: when the harness exported tokeirad's /metrics address, install

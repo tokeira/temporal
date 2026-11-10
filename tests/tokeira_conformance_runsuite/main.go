@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -47,17 +48,21 @@ func main() {
 }
 
 // run boots-or-reuses a tokeirad frontend, runs the corpus filtered to the
-// operator's -run pattern once, prints a per-leaf tally, and returns the process
-// exit code plus any harness-level error. A failing suite is data, not a harness
+// operator's -run pattern the requested number of times, prints a per-leaf tally,
+// and returns the exit code plus any harness-level error. A failing suite is data, not a harness
 // error: it yields exit code 1 with a nil error (the tally is still printed),
 // while a harness fault (no binary/frontend, bad usage) returns a non-nil error.
 func run() (int, error) {
 	timeout := flag.Duration("timeout", 8*time.Minute, "per-run `go test -timeout` applied to the suite")
+	repeat := flag.Int("repeat", 1, "number of times to run the selected tests")
 	flag.Parse()
+	if *repeat < 1 {
+		return 2, errors.New("-repeat must be at least 1")
+	}
 	pattern := flag.Arg(0)
 	if pattern == "" {
 		return 2, fmt.Errorf(
-			"usage: tokeira-conformance-runsuite [-timeout DUR] '<go-test-run-regexp>' " +
+			"usage: tokeira-conformance-runsuite [-timeout DUR] [-repeat N] '<go-test-run-regexp>' " +
 				"(e.g. '^TestWFTFailureReportedProblemsTestSuite$')")
 	}
 
@@ -73,7 +78,7 @@ func run() (int, error) {
 		fmt.Printf("tokeira-conformance-runsuite: reusing operator-managed frontend at %s\n", addr)
 	}
 
-	outcome := runSuite(addr, metricsAddr, controlAddr, authCallbackURL, pattern, *timeout)
+	outcome := runSuite(addr, metricsAddr, controlAddr, authCallbackURL, pattern, *timeout, *repeat)
 	printSummary(pattern, outcome)
 	if !outcome.ok() {
 		return 1, nil
@@ -87,6 +92,7 @@ type suiteOutcome struct {
 	pass, fail, skip int
 	failLeaves       []string
 	testExitErr      bool
+	dynamicConfig    runner.DynamicConfigReport
 }
 
 // ok reports a clean run: the process exited zero and no leaf failed. Both are
@@ -102,11 +108,11 @@ func (o suiteOutcome) ok() bool { return !o.testExitErr && o.fail == 0 }
 // excluded via the skip registry — the same -skip run-all applies — so a
 // single-suite run classifies identically to the baseline; -skip excludes only
 // the named leaves, never their siblings.
-func runSuite(addr, metricsAddr, controlAddr, authCallbackURL, pattern string, timeout time.Duration) suiteOutcome {
+func runSuite(addr, metricsAddr, controlAddr, authCallbackURL, pattern string, timeout time.Duration, repeat int) suiteOutcome {
 	args := []string{
 		"test", corpusPattern,
 		"-tags", "test_dep",
-		"-count=1",
+		fmt.Sprintf("-count=%d", repeat),
 		// Temporal's dedicated clusters isolate unlabeled metrics. Shape-2 shares
 		// one tokeirad, so serialize parallel-suite leaves to preserve that same
 		// observable capture boundary without inventing metric labels.
@@ -136,14 +142,24 @@ func runSuite(addr, metricsAddr, controlAddr, authCallbackURL, pattern string, t
 	cmd.Stdout = io.MultiWriter(os.Stdout, &buf)
 	cmd.Stderr = os.Stderr
 
-	var outcome suiteOutcome
-	if runErr := cmd.Run(); runErr != nil {
+	runErr := cmd.Run()
+	outcome, parseErr := parseSuiteOutput(buf.Bytes())
+	if runErr != nil {
 		// A non-zero exit (a failing or panicking suite) is expected data, not a
 		// harness fault; record it so the runner's exit code reflects it.
 		outcome.testExitErr = true
 	}
-	outcome.pass, outcome.fail, outcome.skip, outcome.failLeaves = tally(&buf)
+	if parseErr != nil {
+		fmt.Fprintf(os.Stderr, "tokeira-conformance-runsuite: incomplete dynamic-config summary: %v\n", parseErr)
+	}
 	return outcome
+}
+
+func parseSuiteOutput(output []byte) (suiteOutcome, error) {
+	var outcome suiteOutcome
+	outcome.pass, outcome.fail, outcome.skip, outcome.failLeaves = tally(bytes.NewReader(output))
+	err := outcome.dynamicConfig.ReadVerbose(bytes.NewReader(output))
+	return outcome, err
 }
 
 // tally scrapes the `go test -v` stream for leaf-level outcomes. It counts the
@@ -185,6 +201,7 @@ func printSummary(pattern string, o suiteOutcome) {
 	} else {
 		fmt.Println("result: FAIL")
 	}
+	fmt.Print(o.dynamicConfig.Summary())
 }
 
 // entrypointOf extracts the top-level Test entrypoint name from a `go test -run`

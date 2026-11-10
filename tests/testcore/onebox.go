@@ -88,6 +88,7 @@ type (
 		schedulerClient schedulerpb.SchedulerServiceClient
 
 		dcClient                         *dynamicconfig.MemoryClient
+		conformanceConfig                *conformanceDynamicConfigBridge
 		testHooks                        testhooks.TestHooks
 		logger                           log.Logger
 		clusterMetadataConfig            *cluster.Config
@@ -1015,18 +1016,13 @@ func sdkClientFactoryProvider(
 }
 
 func (c *TemporalImpl) overrideDynamicConfig(t *testing.T, name dynamicconfig.Key, value any) func() {
-	inProcess := c.dcClient.PartialOverrideValue(name, value)
-	// Tokeira Tier-2 conformance: the in-process MemoryClient write above is invisible to an
-	// out-of-process tokeirad, so also deliver the override through tokeirad's control RPC
-	// (tokeira_dynamic_config_bridge.go). A no-op outside conformance mode or for a key tokeira
-	// does not honour; it never fails the test (skip registry / config-as-constant cover those).
-	controlCleanup := deliverConformanceDynamicConfigOverride(t, name, value)
-	cleanup := func() {
+	inProcess := sync.OnceFunc(c.dcClient.PartialOverrideValue(name, value))
+	t.Cleanup(inProcess)
+	controlCleanup := c.deliverConformanceDynamicConfigOverride(t, name, value)
+	return func() {
 		controlCleanup()
 		inProcess()
 	}
-	t.Cleanup(cleanup)
-	return cleanup
 }
 
 func (c *TemporalImpl) injectHook(t *testing.T, hook testhooks.Hook, scope any) func() {

@@ -261,10 +261,10 @@ func (s *FunctionalTestBase) TearDownSuite() {
 func (s *FunctionalTestBase) SetupSuiteWithCluster(options ...TestClusterOption) {
 	// Acquire a slot from the dedicated test cluster pool.
 	testClusterPool.dedicated.acquireSlot(s.T())
-	s.setupCluster(options...)
+	s.setupCluster(true, options...)
 }
 
-func (s *FunctionalTestBase) setupCluster(options ...TestClusterOption) {
+func (s *FunctionalTestBase) setupCluster(suiteConfig bool, options ...TestClusterOption) {
 	params := ApplyTestClusterOptions(options)
 
 	// NOTE: A suite might set its own logger. Example: AcquireShardSuiteBase.
@@ -291,6 +291,10 @@ func (s *FunctionalTestBase) setupCluster(options ...TestClusterOption) {
 		EnableMTLS:                      params.EnableMTLS,
 		CustomHistoryArchiverFactory:    params.CustomHistoryArchiverFactory,
 		CustomVisibilityArchiverFactory: params.CustomVisibilityArchiverFactory,
+	}
+
+	if suiteConfig {
+		s.testClusterConfig.conformanceSuiteT = s.T()
 	}
 
 	// Apply configuration for shared clusters.
@@ -334,6 +338,7 @@ func (s *FunctionalTestBase) setupCluster(options ...TestClusterOption) {
 func (s *FunctionalTestBase) SetupTest() {
 	s.maybeSkipForConformance()
 	s.checkTestShard()
+	s.testCluster.host.conformanceConfig.applySuite(s.T())
 	s.initAssertions()
 	s.setupSdk()
 	s.taskPoller = taskpoller.New(s.T(), s.FrontendClient(), s.Namespace().String())
@@ -380,8 +385,8 @@ func ApplyTestClusterOptions(options []TestClusterOption) TestClusterParams {
 
 func (s *FunctionalTestBase) setupSdk() {
 	// Set URL template after httpAPAddress is set, see commonnexus.RouteCompletionCallback
-	s.OverrideDynamicConfig(
-		nexusoperations.CallbackURLTemplate,
+	s.testCluster.host.overrideHarnessDynamicConfig(s.T(),
+		nexusoperations.CallbackURLTemplate.Key(),
 		"http://"+s.HttpAPIAddress()+"/namespaces/{{.NamespaceName}}/nexus/callback")
 
 	clientOptions := sdkclient.Options{
@@ -690,11 +695,11 @@ func (s *FunctionalTestBase) RunTestWithMatchingBehavior(subtest func()) {
 	for _, behavior := range AllMatchingBehaviors() {
 		s.Run(behavior.Name(), func() {
 			if behavior.ForceTaskForward || behavior.ForcePollForward {
-				s.OverrideDynamicConfig(dynamicconfig.MatchingNumTaskqueueReadPartitions, 13)
-				s.OverrideDynamicConfig(dynamicconfig.MatchingNumTaskqueueWritePartitions, 13)
+				s.testCluster.host.overrideHarnessDynamicConfig(s.T(), dynamicconfig.MatchingNumTaskqueueReadPartitions.Key(), 13)
+				s.testCluster.host.overrideHarnessDynamicConfig(s.T(), dynamicconfig.MatchingNumTaskqueueWritePartitions.Key(), 13)
 			} else {
-				s.OverrideDynamicConfig(dynamicconfig.MatchingNumTaskqueueReadPartitions, 1)
-				s.OverrideDynamicConfig(dynamicconfig.MatchingNumTaskqueueWritePartitions, 1)
+				s.testCluster.host.overrideHarnessDynamicConfig(s.T(), dynamicconfig.MatchingNumTaskqueueReadPartitions.Key(), 1)
+				s.testCluster.host.overrideHarnessDynamicConfig(s.T(), dynamicconfig.MatchingNumTaskqueueWritePartitions.Key(), 1)
 			}
 			behavior.InjectHooks(s)
 			subtest()

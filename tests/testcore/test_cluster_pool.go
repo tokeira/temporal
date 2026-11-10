@@ -183,7 +183,7 @@ func (p *clusterPool) createCluster(t *testing.T, dynamicConfig map[dynamicconfi
 		opts = append(opts, WithDynamicConfigOverrides(dynamicConfig))
 	}
 
-	tbase.setupCluster(opts...)
+	tbase.setupCluster(false, opts...)
 
 	return tbase
 }
